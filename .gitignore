@@ -1,0 +1,61 @@
+# Environnement virtuel Python
+venv/
+env/
+ENV/
+.venv/
+
+# Fichiers Python compilés
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de données SQLite
+*.sqlite3
+db.sqlite3
+
+# Fichiers média uploadés
+media/
+
+# Fichiers statiques collectés
+static/
+staticfiles/
+
+# Variables d'environnement
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+
+# Cache Django
+*.pot
+
+# Fichiers de migration (optionnel - décommentez si vous ne voulez pas les committer)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
