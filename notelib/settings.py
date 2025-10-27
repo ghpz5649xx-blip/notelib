@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     # Local apps
     'notelib',
     'server.apps.ServerConfig',
+    'notebooks.apps.NotebooksConfig',
 ]
 
 WIKI_MARKDOWN_KWARGS = {
@@ -171,3 +172,6 @@ SITE_ID = 1
 # Editeur pour le wiki
 # WIKI_EDITOR = 'notelib.editors.EasyMDEEditor'
 WIKI_EDITOR = 'notelib.editors.ToastUIEditor'
+
+# Configuration du stockage des features
+FEATURE_STORAGE_DIR = os.path.join(BASE_DIR, 'storage', 'features')

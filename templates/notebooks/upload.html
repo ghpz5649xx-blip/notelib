@@ -1,0 +1,143 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Upload Notebook - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-upload"></i>
+                        Uploader un Notebook
+                    </h3>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="notebook-upload-form">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Nom du notebook -->
+                        <div class="mb-4">
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-bold">
+                                {{ form.name.label }}
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                            <div class="text-danger mt-1">
+                                {{ form.name.errors }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                {{ form.name.help_text }}
+                            </small>
+                        </div>
+                        
+                        <!-- Fichier -->
+                        <div class="mb-4">
+                            <label for="{{ form.file.id_for_label }}" class="form-label fw-bold">
+                                {{ form.file.label }}
+                            </label>
+                            {{ form.file }}
+                            {% if form.file.errors %}
+                            <div class="text-danger mt-1">
+                                {{ form.file.errors }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                {{ form.file.help_text }}
+                            </small>
+                        </div>
+                        
+                        <!-- Mode sandbox -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                {{ form.sandbox_mode.label }}
+                            </label>
+                            <div class="sandbox-mode-options">
+                                {% for radio in form.sandbox_mode %}
+                                <div class="form-check">
+                                    {{ radio.tag }}
+                                    <label class="form-check-label" for="{{ radio.id_for_label }}">
+                                        {{ radio.choice_label }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <small class="form-text text-muted">
+                                {{ form.sandbox_mode.help_text }}
+                            </small>
+                        </div>
+                        
+                        <!-- Option wiki -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                {{ form.create_wiki_article }}
+                                <label class="form-check-label" for="{{ form.create_wiki_article.id_for_label }}">
+                                    {{ form.create_wiki_article.label }}
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                {{ form.create_wiki_article.help_text }}
+                            </small>
+                        </div>
+                        
+                        <!-- Boutons -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{% url 'notebooks:list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i>
+                                Retour
+                            </a>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+                                <i class="fas fa-upload"></i>
+                                Uploader et traiter
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Info box -->
+            <div class="alert alert-info mt-4">
+                <h5 class="alert-heading">
+                    <i class="fas fa-info-circle"></i>
+                    Comment ça marche ?
+                </h5>
+                <ol class="mb-0">
+                    <li>Uploadez votre notebook Jupyter (.ipynb)</li>
+                    <li>NoteLib extrait automatiquement les fonctions décorées avec <code>@feature</code></li>
+                    <li>Les features sont enregistrées dans la bibliothèque</li>
+                    <li>Une page wiki de documentation est créée (optionnel)</li>
+                </ol>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('notebook-upload-form').addEventListener('submit', function() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement en cours...';
+});
+</script>
+
+<style>
+.sandbox-mode-options {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+</style>
+{% endblock %}

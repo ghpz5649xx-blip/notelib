@@ -13,12 +13,15 @@ urlpatterns = [
 
     # API pour l'arborescence
     path('api/article-tree/', article_tree_api, name='article_tree_api'),
+
+    # 🆕 UI Notebooks
+    path('notebooks/', include('notebooks.urls')),
     
     # Django-nyt notifications (requis par django-wiki)
     path('notifications/', include('django_nyt.urls')),
     
     # Wiki URLs - accessible à la racine
-    path('wiki/', get_wiki_pattern()),
+    path('', get_wiki_pattern()),
 
 ]
 

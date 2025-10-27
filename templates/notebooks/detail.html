@@ -1,0 +1,384 @@
+{% extends "wiki/base.html" %}
+{% load static humanize %}
+
+{% block wiki_site_title %}{{ notebook.name }} - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'notebooks:list' %}">Notebooks</a>
+                    </li>
+                    <li class="breadcrumb-item active">{{ notebook.name }}</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="fas fa-file-code"></i>
+                    {{ notebook.name }}
+                </h2>
+                
+                <div>
+                    {% if notebook.wiki_article %}
+                    <a href="{% url 'wiki:get' notebook.wiki_article.urlpath_set.first.path %}" 
+                       class="btn btn-outline-primary">
+                        <i class="fas fa-book-open"></i>
+                        Voir la doc
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{{ notebook.file.url }}" 
+                       download 
+                       class="btn btn-outline-secondary">
+                        <i class="fas fa-download"></i>
+                        Télécharger
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Informations générales -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="mb-0">Informations</h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="200">Statut :</th>
+                            <td>
+                                {% if notebook.status == 'success' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check"></i> Succès
+                                </span>
+                                {% elif notebook.status == 'error' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times"></i> Erreur
+                                </span>
+                                {% elif notebook.status == 'processing' %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-spinner fa-spin"></i> En cours
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-clock"></i> En attente
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Hash :</th>
+                            <td><code>{{ notebook.hash|truncatechars:16 }}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Taille :</th>
+                            <td>{{ notebook.size|filesizeformat }}</td>
+                        </tr>
+                        <tr>
+                            <th>Features extraites :</th>
+                            <td><strong>{{ notebook.feature_count }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Uploadé par :</th>
+                            <td>
+                                {% if notebook.uploaded_by %}
+                                <i class="fas fa-user"></i> {{ notebook.uploaded_by.username }}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Date d'upload :</th>
+                            <td>{{ notebook.uploaded_at|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Traité le :</th>
+                            <td>
+                                {% if notebook.processed_at %}
+                                {{ notebook.processed_at|date:"d/m/Y H:i" }}
+                                {% else %}
+                                <span class="text-muted">Non traité</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    {% if notebook.error_message %}
+                    <div class="alert alert-danger mt-3">
+                        <strong>Erreur :</strong><br>
+                        <pre class="mb-0">{{ notebook.error_message }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="mb-0">Actions</h4>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="reprocessNotebook()">
+                            <i class="fas fa-sync"></i>
+                            Retraiter le notebook
+                        </button>
+                        
+                        <button class="btn btn-outline-secondary" onclick="showExecutionLogs()">
+                            <i class="fas fa-history"></i>
+                            Voir l'historique
+                        </button>
+                        
+                        <hr>
+                        
+                        <button class="btn btn-outline-danger" onclick="deleteNotebook()">
+                            <i class="fas fa-trash"></i>
+                            Supprimer le notebook
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des features -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-cube"></i>
+                        Features extraites ({{ features|length }})
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if features %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Hash</th>
+                                    <th>Inputs</th>
+                                    <th>Outputs</th>
+                                    <th>Cellule</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for feature_link in features %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ feature_link.feature.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <code class="small">{{ feature_link.feature.hash|truncatechars:12 }}</code>
+                                    </td>
+                                    <td>
+                                        {% if feature_link.feature.inputs %}
+                                        <span class="badge bg-info">
+                                            {{ feature_link.feature.inputs|length }}
+                                        </span>
+                                        <small class="text-muted">
+                                            {{ feature_link.feature.inputs|join:", " }}
+                                        </small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if feature_link.feature.outputs %}
+                                        <span class="badge bg-success">
+                                            {{ feature_link.feature.outputs|length }}
+                                        </span>
+                                        <small class="text-muted">
+                                            {{ feature_link.feature.outputs|join:", " }}
+                                        </small>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            #{{ feature_link.cell_index }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ feature_link.created_at|naturaltime }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">Aucune feature extraite</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Historique des exécutions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-history"></i>
+                        Historique des exécutions
+                    </h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if executions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Sandbox</th>
+                                    <th>Features</th>
+                                    <th>Erreurs</th>
+                                    <th>Durée</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for exec in executions %}
+                                <tr>
+                                    <td><code>#{{ exec.id }}</code></td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ exec.sandbox_mode }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            {{ exec.features_imported }} importées
+                                        </span>
+                                        <span class="badge bg-info">
+                                            {{ exec.features_existing }} existantes
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if exec.errors_count > 0 %}
+                                        <span class="badge bg-danger">
+                                            {{ exec.errors_count }} erreur{{ exec.errors_count|pluralize }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-success">
+                                            <i class="fas fa-check"></i>
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if exec.duration %}
+                                        {{ exec.duration|floatformat:2 }}s
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ exec.started_at|naturaltime }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">Aucune exécution enregistrée</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const notebookId = {{ notebook.pk }};
+
+function reprocessNotebook() {
+    if (!confirm('Voulez-vous retraiter ce notebook ?')) return;
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement...';
+    
+    fetch(`/notebooks/${notebookId}/reprocess/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert(`Retraitement réussi :\n- ${data.features_imported} features importées\n- ${data.features_existing} features existantes\n- ${data.errors_count} erreurs`);
+            location.reload();
+        } else {
+            alert(`Erreur : ${data.error}`);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync"></i> Retraiter le notebook';
+        }
+    })
+    .catch(error => {
+        alert('Erreur réseau');
+        console.error(error);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync"></i> Retraiter le notebook';
+    });
+}
+
+function deleteNotebook() {
+    if (!confirm('Voulez-vous vraiment supprimer ce notebook ? Cette action est irréversible.')) return;
+    
+    fetch(`/notebooks/${notebookId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert(data.message);
+            window.location.href = '{% url "notebooks:list" %}';
+        } else {
+            alert(`Erreur : ${data.error}`);
+        }
+    })
+    .catch(error => {
+        alert('Erreur réseau');
+        console.error(error);
+    });
+}
+
+function showExecutionLogs() {
+    // TODO: Implémenter une modale avec les logs détaillés
+    alert('Fonctionnalité à venir : affichage détaillé des logs');
+}
+</script>
+{% endblock %}

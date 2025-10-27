@@ -1,0 +1,225 @@
+{% extends "wiki/base.html" %}
+{% load static humanize %}
+
+{% block wiki_site_title %}Notebooks - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    
+    <!-- Header avec stats -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="fas fa-book"></i>
+                    Mes Notebooks
+                </h2>
+                <a href="{% url 'notebooks:upload' %}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i>
+                    Uploader un notebook
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h3 class="mb-0">{{ stats.total }}</h3>
+                    <small>Total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h3 class="mb-0">{{ stats.success }}</h3>
+                    <small>Réussis</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h3 class="mb-0">{{ stats.processing }}</h3>
+                    <small>En cours</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h3 class="mb-0">{{ stats.error }}</h3>
+                    <small>Erreurs</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tableau des notebooks -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="mb-0">Liste des notebooks</h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if notebooks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Statut</th>
+                                    <th>Features</th>
+                                    <th>Uploadé par</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for notebook in notebooks %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'notebooks:detail' notebook.pk %}" class="text-decoration-none">
+                                            <i class="fas fa-file-code"></i>
+                                            <strong>{{ notebook.name }}</strong>
+                                        </a>
+                                        {% if notebook.wiki_article %}
+                                        <a href="{% url 'wiki:get' notebook.wiki_article.urlpath_set.first.path %}" 
+                                           class="ms-2" 
+                                           title="Voir la doc wiki">
+                                            <i class="fas fa-book-open text-primary"></i>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if notebook.status == 'success' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Succès
+                                        </span>
+                                        {% elif notebook.status == 'error' %}
+                                        <span class="badge bg-danger" title="{{ notebook.error_message }}">
+                                            <i class="fas fa-times"></i> Erreur
+                                        </span>
+                                        {% elif notebook.status == 'processing' %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-spinner fa-spin"></i> En cours
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-clock"></i> En attente
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">
+                                            {{ notebook.feature_count }} feature{{ notebook.feature_count|pluralize }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if notebook.uploaded_by %}
+                                        <i class="fas fa-user"></i>
+                                        {{ notebook.uploaded_by.username }}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ notebook.uploaded_at|naturaltime }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'notebooks:detail' notebook.pk %}" 
+                                               class="btn btn-outline-primary"
+                                               title="Détails">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <button class="btn btn-outline-secondary"
+                                                    onclick="reprocessNotebook({{ notebook.pk }})"
+                                                    title="Retraiter">
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger"
+                                                    onclick="deleteNotebook({{ notebook.pk }})"
+                                                    title="Supprimer">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Aucun notebook uploadé</p>
+                        <a href="{% url 'notebooks:upload' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Uploader votre premier notebook
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function reprocessNotebook(notebookId) {
+    if (!confirm('Voulez-vous retraiter ce notebook ?')) return;
+    
+    fetch(`/notebooks/${notebookId}/reprocess/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert(`Retraitement réussi : ${data.features_imported} features importées`);
+            location.reload();
+        } else {
+            alert(`Erreur : ${data.error}`);
+        }
+    })
+    .catch(error => {
+        alert('Erreur réseau');
+        console.error(error);
+    });
+}
+
+function deleteNotebook(notebookId) {
+    if (!confirm('Voulez-vous vraiment supprimer ce notebook ?')) return;
+    
+    fetch(`/notebooks/${notebookId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(`Erreur : ${data.error}`);
+        }
+    })
+    .catch(error => {
+        alert('Erreur réseau');
+        console.error(error);
+    });
+}
+</script>
+{% endblock %}
