@@ -1,0 +1,49 @@
+{% extends "wiki/base_site.html" %}
+{% load static i18n wiki_tags %}
+
+{% block wiki_site_title %} Note Lib{% endblock %}
+
+
+
+{% block wiki_header_branding %}
+<a class="navbar-brand" href="{% url 'wiki:root' %}">
+    <i class="fas fa-book"></i> Note Lib
+</a>
+{% endblock %}
+
+
+{% block wiki_header_navlinks %}
+<ul class="nav navbar-nav mr-auto">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'wiki:create' path='' %}">
+            <i class="fas fa-plus"></i> Nouvelle page
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block wiki_body %}
+    {{ block.super }}
+    <script src="{% static "js/toc-scroll.js" %}"></script>
+    <!-- ToastUI CSS -->
+    <link rel="stylesheet" href="{% static 'toastui/css/toastui-editor.min.css' %}">
+    <!-- Ton CSS personnalisé, toujours en dernier -->
+    <link rel="stylesheet" href="{% static 'css/wiki_custom.css' %}">
+    
+{% endblock %}
+
+{% block wiki_content %}
+    {% load wiki_toc %}
+    <div class="page-toc">
+    {% build_toc content_html 3 as toc_html %}
+    {{ toc_html|safe }}
+    </div>
+
+    <div class="page-content">
+    {{ content_html|safe }}
+    </div>
+{% endblock %}
+
+{% block wiki_footer_logo %}
+{% endblock %}
+

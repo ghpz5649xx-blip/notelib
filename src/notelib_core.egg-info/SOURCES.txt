@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/notelib_core/__init__.py
+src/notelib_core/api_client.py
+src/notelib_core/artefact_store.py
+src/notelib_core/config.py
+src/notelib_core/feature.py
+src/notelib_core/loader.py
+src/notelib_core/network.py
+src/notelib_core/registry.py
+src/notelib_core/runner.py
+src/notelib_core/sandbox.py
+src/notelib_core.egg-info/PKG-INFO
+src/notelib_core.egg-info/SOURCES.txt
+src/notelib_core.egg-info/dependency_links.txt
+src/notelib_core.egg-info/requires.txt
+src/notelib_core.egg-info/top_level.txt

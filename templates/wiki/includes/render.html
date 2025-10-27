@@ -1,0 +1,25 @@
+{% load wiki_tags i18n cache sekizai_tags static wiki_toc %}
+
+<div class="container-fluid wiki-render-container">
+  <div class="row gx-5">
+    
+    <!-- 🧭 Sommaire -->
+    <aside class="col-lg-3 col-md-12 mb-4 wiki-toc-container">
+      {% build_toc content 4 as toc_html %}
+      {% if toc_html %}
+        <nav class="wiki-toc">
+          <h5 class="wiki-toc-title">Sommaire</h5>
+          {{ toc_html|safe }}
+        </nav>
+      {% endif %}
+    </aside>
+
+    <!-- 📄 Contenu principal -->
+    <main class="col-lg-9 col-md-12 wiki-article-container">
+      <div class="wiki-article">
+        {{ content|default:"" }}
+      </div>
+    </main>
+
+  </div>
+</div>

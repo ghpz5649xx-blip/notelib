@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notelib-core"
+version = "0.1.9"
+description = "Moteur NoteLib : gestion des artefacts et features exécutables depuis des notebooks."
+readme = "README.md"
+requires-python = ">=3.7.3"
+authors = [{ name = "Stéphane Bugat", email = "ghpz5649xx@privaterelay.appleid.com" }]
+license = { text = "MIT" }
+dependencies = [
+  "pandas",
+  "nbconvert",
+  "nbformat",
+  "zstandard",
+  "cloudpickle"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["notelib_core"]
+
+[project.urls]
+Homepage = "https://github.com/ghpz5649xx-blip/notelib"

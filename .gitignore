@@ -18,7 +18,6 @@ db.sqlite3
 media/
 
 # Fichiers statiques collectés
-static/
 staticfiles/
 
 # Variables d'environnement
@@ -44,8 +43,8 @@ staticfiles/
 *.pot
 
 # Fichiers de migration (optionnel - décommentez si vous ne voulez pas les committer)
-# */migrations/*.py
-# !*/migrations/__init__.py
+*/migrations/*.py
+!*/migrations/__init__.py
 
 # Coverage reports
 htmlcov/
@@ -59,3 +58,7 @@ coverage.xml
 
 # mypy
 .mypy_cache/
+
+# stockage des features et autres à venir
+storage/
+

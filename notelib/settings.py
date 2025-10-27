@@ -41,19 +41,35 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'django.contrib.sites',
     
+    # Pour avoir la commande show_urls
+    'django_extensions',
+    
     # Pour les formulaires et markdown
     'django_nyt',
     'mptt',
     'sekizai',
     'sorl.thumbnail',
+
+    # REST API
+    'rest_framework',
     
     # Django-wiki apps
     'wiki',
     'wiki.plugins.attachments',
     'wiki.plugins.notifications',
-    'wiki.plugins.images',
-    'wiki.plugins.macros',
+
+    # Local apps
+    'notelib',
+    'server.apps.ServerConfig',
 ]
+
+WIKI_MARKDOWN_KWARGS = {
+    "extensions": [
+        "markdown.extensions.fenced_code",
+        "markdown.extensions.tables",
+        "markdown.extensions.toc",
+    ]
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -70,7 +86,7 @@ ROOT_URLCONF = 'notelib.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -131,6 +147,15 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+# For development
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
+
+# For collectstatic (used in production)
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+
 # Media files (uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -142,3 +167,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Site ID requis pour django-wiki
 SITE_ID = 1
+
+# Editeur pour le wiki
+# WIKI_EDITOR = 'notelib.editors.EasyMDEEditor'
+WIKI_EDITOR = 'notelib.editors.ToastUIEditor'
