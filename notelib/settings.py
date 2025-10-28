@@ -60,7 +60,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'notelib',
-    'server.apps.ServerConfig',
+    'features.apps.FeaturesConfig',
     'notebooks.apps.NotebooksConfig',
 ]
 

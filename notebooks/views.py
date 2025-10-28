@@ -8,8 +8,8 @@ from django.views.decorators.http import require_http_methods
 from .models import NotebookMeta, NotebookExecution, NotebookFeature
 from .forms import NotebookUploadForm
 from .services import notebook_service
-from server.services import feature_service
-from server.storage import feature_storage
+from features.services import feature_service
+from features.storage import feature_storage
 
 logger = logging.getLogger("notelib")
 
@@ -192,3 +192,4 @@ def notebook_delete(request, pk):
             'status': 'error',
             'error': str(e)
         }, status=500)
+    

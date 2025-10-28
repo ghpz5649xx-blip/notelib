@@ -9,7 +9,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # API du server
-    path("api/", include("server.urls")),
+    path("api/", include("features.urls")),
 
     # API pour l'arborescence
     path('api/article-tree/', article_tree_api, name='article_tree_api'),

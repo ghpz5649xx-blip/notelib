@@ -172,7 +172,7 @@ class FeatureService:
         """
         # Vérification en registry
         if self.registry.is_loaded(hash_value):
-            logger.info(f"✅ Feature loaded from registry: {hash_value[:8]}")
+            logger.info(f"✅ Feature retrieved from registry: {hash_value[:8]}")
             return self.registry.get(hash_value).obj
         
         # Chargement depuis BDD
@@ -186,7 +186,7 @@ class FeatureService:
 
         feature.mark_as_loaded()
         
-        logger.info(f"✅ Feature loaded: {feature.name} ({hash_value[:8]})")
+        logger.info(f"✅ Feature loaded in registry: {feature.name} ({hash_value[:8]})")
         
         return obj
     
@@ -254,7 +254,8 @@ class FeatureService:
         """
         Nettoie le registre et les fichiers orphelins.
         """
-        self.registry.clear()
+        for hash in self.registry.list_hashes():
+            self.unload_feature(hash_value=hash)
         orphans_count = self.storage.cleanup_orphans()
         logger.info(f"🧹 Cleanup completed: {orphans_count} orphan files deleted")
 

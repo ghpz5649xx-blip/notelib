@@ -1,4 +1,4 @@
-# app/views.py
+# features/views.py
 import os
 import base64
 import hashlib
@@ -11,7 +11,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework import status
 from pathlib import Path
 import traceback
-
+from django.core import serializers
+import json
 
 from .models import FeatureMeta
 from notelib_core.loader import load_notebook_features
@@ -39,6 +40,7 @@ def list_features(request):
                 "inputs": f.inputs,
                 "outputs": f.outputs,
                 "created_at": f.created_at.isoformat(),
+                "loaded": f.is_loaded,
             }
             for f in features
         ]
@@ -222,3 +224,9 @@ def import_feature(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@api_view(["GET"])
+def registry(request):
+    return Response(
+        feature_service.registry.to_dict(),
+        status=status.HTTP_200_OK
+    )

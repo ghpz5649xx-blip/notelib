@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import NotebookMeta, NotebookExecution, NotebookFeature
-from server.models import FeatureMeta
+from features.models import FeatureMeta
 from notelib_core.loader import load_notebook_features
 
 logger = logging.getLogger("notelib")

@@ -73,7 +73,7 @@ class NotebookFeature(models.Model):
     """Lien entre un notebook et les features qu'il produit"""
     
     notebook = models.ForeignKey(NotebookMeta, on_delete=models.CASCADE, related_name='features')
-    feature = models.ForeignKey('server.FeatureMeta', on_delete=models.CASCADE)
+    feature = models.ForeignKey('features.FeatureMeta', on_delete=models.CASCADE)
     cell_index = models.IntegerField()
     
     created_at = models.DateTimeField(auto_now_add=True)
