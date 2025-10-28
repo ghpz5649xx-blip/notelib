@@ -122,7 +122,7 @@ class FeatureStorage:
             binary_size = len(binary_data)
             relative_path = self._get_relative_path(hash_value)
             
-            logger.info(f"✅ Feature binary saved: {relative_path} ({binary_size} bytes)")
+            logger.info(f"💾 Feature binary saved: {relative_path} ({binary_size} bytes)")
             
             return relative_path, binary_size
             
@@ -175,7 +175,7 @@ class FeatureStorage:
         
         if file_path.exists():
             file_path.unlink()
-            logger.info(f"🗑️  Feature binary deleted: {hash_value}")
+            logger.info(f"🗑️  Feature binary deleted: {hash_value[:8]}")
             return True
         
         return False
@@ -204,10 +204,10 @@ class FeatureStorage:
         Returns:
             Nombre de fichiers supprimés
         """
-        from .models import Feature
+        from .models import FeatureMeta
         
         deleted_count = 0
-        db_hashes = set(Feature.objects.values_list('hash', flat=True))
+        db_hashes = set(FeatureMeta.objects.values_list('hash', flat=True))
         
         # Parcours des fichiers
         for subdir in self.hash_dir.iterdir():
@@ -223,3 +223,6 @@ class FeatureStorage:
                     logger.info(f"🗑️  Orphan binary deleted: {hash_value}")
         
         return deleted_count
+    
+
+feature_storage = FeatureStorage()

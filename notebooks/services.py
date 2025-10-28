@@ -26,11 +26,22 @@ class NotebookService:
     
     @staticmethod
     def compute_hash(file_path: Path) -> str:
-        """Calcule le hash SHA-256 d'un fichier."""
+        """
+        Calcule le hash SHA-256 d'un fichier.
+        
+        Args:
+            file_path: Chemin vers le fichier (Path ou str)
+        
+        Returns:
+            Hash SHA-256 en hexadécimal
+        """
         sha256 = hashlib.sha256()
+        file_path = Path(file_path)
+        
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(8192), b''):
                 sha256.update(chunk)
+        
         return sha256.hexdigest()
     
     @staticmethod
@@ -71,28 +82,18 @@ class NotebookService:
             )
             
             # Mise à jour des statistiques
-            features = result.get('features', [])
+            features_def = result.get('features_def', [])
             errors = result.get('errors', [])
             
-            features_imported = 0
-            features_existing = 0
+            features_imported = result.get('features_imported', 0)
+            features_existing = result.get('features_existing', 0)
             
             with transaction.atomic():
                 # Enregistrement des features dans la DB
-                for feature_def in features:
-                    feature_meta, created = FeatureMeta.objects.get_or_create(
-                        name=feature_def.name,
-                        hash=feature_def.hash,
-                        defaults={
-                            'inputs': feature_def.inputs,
-                            'outputs': feature_def.outputs,
-                        }
+                for feature_def in features_def:
+                    feature_meta = FeatureMeta.objects.get(
+                        hash=feature_def.hash
                     )
-                    
-                    if created:
-                        features_imported += 1
-                    else:
-                        features_existing += 1
                     
                     # Lien notebook → feature
                     NotebookFeature.objects.get_or_create(
@@ -103,7 +104,7 @@ class NotebookService:
                 
                 # Mise à jour du notebook
                 notebook.status = 'success'
-                notebook.feature_count = len(features)
+                notebook.feature_count = len(features_def)
                 notebook.processed_at = timezone.now()
                 notebook.save()
             
@@ -116,7 +117,7 @@ class NotebookService:
             execution.features_existing = features_existing
             execution.errors_count = len(errors)
             execution.execution_log = {
-                'features': [f.to_dict() for f in features],
+                'features': [f.to_dict() for f in features_def],
                 'errors': errors,
             }
             execution.completed_at = timezone.now()

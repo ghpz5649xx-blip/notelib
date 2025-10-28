@@ -78,7 +78,6 @@ class FeatureService:
         # Sauvegarde du binaire sur FS
         if not self.storage.exists(hash_value):
             relative_path, binary_size = self.storage.save(obj, hash_value)
-            logger.info(f"💾 Binary saved: {relative_path}")
         else:
             relative_path = self.storage._get_relative_path(hash_value)
             binary_size = self.storage.get_size(hash_value) or 0
@@ -86,7 +85,7 @@ class FeatureService:
         
         # Création de la feature en BDD (transaction atomique)
         with transaction.atomic():
-            feature = FeatureMeta.objects.create(
+            feature, created = FeatureMeta.objects.get_or_create(
                 name=name,
                 hash=hash_value,
                 inputs=feature_data.get('inputs', []),
@@ -98,7 +97,10 @@ class FeatureService:
             
             logger.info(f"✅ Feature created: {name} ({hash_value[:8]})")
         
-        return feature, True
+        # Enregistrement de la feature dans le registre si non présente
+        self.load_feature(hash_value=hash_value)
+        
+        return feature, created
     
     def _create_version(self, feature: FeatureMeta):
         """
@@ -137,6 +139,17 @@ class FeatureService:
         
         logger.debug(f"📋 Version created: {feature.name} v{version_number}")
     
+    def list_hashes(self) -> list:
+        """
+        Liste l'ensemble des features mises en cache dans le registre
+
+        Returns:
+            hash list
+        """
+
+        return self.registry.list_hashes()
+    
+    
     def load_feature(self, hash_value: str) -> object:
         """
         Charge une feature en mémoire.
@@ -170,6 +183,8 @@ class FeatureService:
         
         # Mise en cache dans le registry
         self.registry.register(obj, hash_value=feature.hash)
+
+        feature.mark_as_loaded()
         
         logger.info(f"✅ Feature loaded: {feature.name} ({hash_value[:8]})")
         
@@ -182,6 +197,7 @@ class FeatureService:
         Args:
             hash_value: Hash SHA-256 de la feature
         """
+
         if self.registry.is_loaded(hash_value):
             self.registry.unregister(hash_value)
             
@@ -236,10 +252,38 @@ class FeatureService:
     
     def cleanup_all(self):
         """
-        Nettoie le registry et les fichiers orphelins.
+        Nettoie le registre et les fichiers orphelins.
         """
         self.registry.clear()
         orphans_count = self.storage.cleanup_orphans()
         logger.info(f"🧹 Cleanup completed: {orphans_count} orphan files deleted")
+
+    def cleanup_orphans(self):
+        """
+        Nettoie le registre et le FS de features orphelines (sans entrée en BDD)
+
+        Returns:
+            Nombre de features unregister
+        """
+        
+        deleted_count = 0
+        db_hashes = set(FeatureMeta.objects.values_list('hash', flat=True))
+        registry_hashes = self.list_hashes()
+
+        logger.info(f" Looking for orphans feature in registry")
+        logger.info(f" registry hashes {registry_hashes}")
+        logger.info(f" db hashed {db_hashes}")
+
+        for hash_value in registry_hashes:
+            if hash_value not in db_hashes:
+                self.registry.unregister(hash_value)
+                logger.info(f"🗑️  Orphan binary deleted: {hash_value}")
+                deleted_count += 1
+        
+        self.storage.cleanup_orphans()
+
+        return deleted_count
+
+
 
 feature_service = FeatureService()

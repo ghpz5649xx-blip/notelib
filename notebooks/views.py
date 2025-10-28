@@ -5,9 +5,11 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from .models import NotebookMeta, NotebookExecution
+from .models import NotebookMeta, NotebookExecution, NotebookFeature
 from .forms import NotebookUploadForm
 from .services import notebook_service
+from server.services import feature_service
+from server.storage import feature_storage
 
 logger = logging.getLogger("notelib")
 
@@ -41,11 +43,17 @@ def notebook_upload(request):
             notebook = form.save(commit=False)
             notebook.uploaded_by = request.user
             
-            # Calcul du hash
-            notebook.file.open()
-            notebook.hash = notebook_service.compute_hash(notebook.file.file)
-            notebook.size = notebook.file.size
-            notebook.file.close()
+            # Calcul du hash à partir du contenu du fichier en mémoire
+            uploaded_file = request.FILES['file']
+            uploaded_file.seek(0)  # Revenir au début du fichier
+            
+            # Calculer le hash directement depuis le contenu en mémoire
+            import hashlib
+            sha256 = hashlib.sha256()
+            for chunk in uploaded_file.chunks():
+                sha256.update(chunk)
+            notebook.hash = sha256.hexdigest()
+            notebook.size = uploaded_file.size
             
             # Vérification si le notebook existe déjà
             existing = NotebookMeta.objects.filter(hash=notebook.hash).first()
@@ -56,6 +64,8 @@ def notebook_upload(request):
                 )
                 return redirect('notebooks:detail', pk=existing.pk)
             
+            # Revenir au début du fichier avant de sauvegarder
+            uploaded_file.seek(0)
             notebook.save()
             
             # Traitement asynchrone (ou synchrone pour MVP)
@@ -143,9 +153,9 @@ def notebook_reprocess(request, pk):
 @login_required
 @require_http_methods(["DELETE"])
 def notebook_delete(request, pk):
-    """Supprime un notebook."""
+    """Supprime un notebook, ses features associés et san page wiki dédié"""
     notebook = get_object_or_404(NotebookMeta, pk=pk)
-    
+
     # Vérification des permissions
     if notebook.uploaded_by != request.user and not request.user.is_staff:
         return JsonResponse({
@@ -154,9 +164,23 @@ def notebook_delete(request, pk):
         }, status=403)
     
     try:
+
+        # Suppression des features dans le registre, des binaires associés et en BDD
+        for notebook_feature in notebook.features.all():
+            hash_value = notebook_feature.feature.hash 
+            feature_service.unload_feature(hash_value)
+            feature_storage.delete(hash_value)
+            notebook_feature.feature.delete()
+
         # Suppression du fichier
         notebook.file.delete()
+
+        # Suppression de la page wiki
+        notebook.wiki_article.delete()
+
+        # Suppression du notebook en BDD
         notebook.delete()
+
         
         return JsonResponse({
             'status': 'success',

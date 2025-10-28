@@ -7,7 +7,7 @@
 
 {% block wiki_header_branding %}
 <a class="navbar-brand" href="{% url 'wiki:root' %}">
-    <i class="fas fa-book"></i> Note Lib
+    <i class="fas fa-layer-group"></i> Note Lib
 </a>
 {% endblock %}
 
@@ -34,7 +34,6 @@
 
 {% block wiki_body %}
     {{ block.super }}
-    <script src="{% static "js/toc-scroll.js" %}"></script>
     <!-- ToastUI CSS -->
     <link rel="stylesheet" href="{% static 'toastui/css/toastui-editor.min.css' %}">
     <!-- Ton CSS personnalisé, toujours en dernier -->

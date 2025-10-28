@@ -185,24 +185,38 @@ def load_notebook_features(
                     sandbox.execute_cell(idx, cell_code)
         
         # Extraction des features
-        features = sandbox.get_features()
-
+        features_def = sandbox.get_features()
+            
+        # instenciation du log des features créés / existantes
+        features_existing = 0
+        features_imported = 0
+        
         # Serialisation des features et enregistrement dans le file system 
         if publish:
-            for f in features : 
-                client.publish_feature(f)
+            for feature_def in features_def : 
+                response = client.publish_feature(feature_def)
+                created = response.get('created',False)
+
+                if created:
+                    features_imported+=1
+                else:
+                    features_existing+=1
+
+
 
         
         # Log du résultat
         logger.info(
             f"✅ Notebook {path.name}: "
-            f"{len(features)} features, "
+            f"{len(features_def)} features, "
             f"{len(sandbox.errors)} errors"
         )
         
         return {
-            "features": features,
+            "features_def": features_def,
             "errors": sandbox.errors,
+            "features_imported": features_imported,
+            "features_existing": features_existing
         }
     
     finally:

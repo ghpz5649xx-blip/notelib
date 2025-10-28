@@ -65,6 +65,11 @@ class FeatureRegistry:
             feature_def = FeatureDef(obj, code_override=code_override, hash_value=hash_value)
             self._features_by_name[feature_def.name] = feature_def
             self._features_by_hash[feature_def.hash] = feature_def
+    
+    def register_feature_def(self, feature_def:FeatureDef):
+        with self._lock:
+            self._features_by_name[feature_def.name] = feature_def
+            self._features_by_hash[feature_def.hash] = feature_def
 
 
     def unregister(self, key: str):
@@ -95,6 +100,9 @@ class FeatureRegistry:
 
     def to_dict(self):
         return [f.to_dict() for f in self.all()]
+    
+    def list_hashes(self):
+        return list(self._features_by_hash.keys())
 
 
 # 🔧 Instance globale du registre utilisée par le décorateur @feature

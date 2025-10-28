@@ -8,11 +8,28 @@ class FeatureMeta(models.Model):
     outputs = models.JSONField(default=list) 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # 🆕 Ajout du tracking de l'état en mémoire
+    is_loaded = models.BooleanField(default=False)
+    loaded_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         unique_together = ("name", "hash")
 
     def __str__(self):
         return f"{self.name} - {self.hash} @ {self.created_at}"
+    
+    # 🆕 Méthodes pour gérer l'état
+    def mark_as_loaded(self):
+        """Marque la feature comme chargée en mémoire"""
+        from django.utils import timezone
+        self.is_loaded = True
+        self.loaded_at = timezone.now()
+        self.save(update_fields=['is_loaded', 'loaded_at'])
+    
+    def mark_as_unloaded(self):
+        """Marque la feature comme déchargée de la mémoire"""
+        self.is_loaded = False
+        self.save(update_fields=['is_loaded'])
 
 class FeatureVersion(models.Model):
     feature = models.ForeignKey(FeatureMeta,on_delete=models.CASCADE)
