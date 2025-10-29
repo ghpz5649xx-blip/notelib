@@ -14,8 +14,17 @@ urlpatterns = [
     # API pour l'arborescence
     path('api/article-tree/', article_tree_api, name='article_tree_api'),
 
-    # 🆕 UI Notebooks
+    # UI Notebooks
     path('notebooks/', include('notebooks.urls')),
+
+    # Artefacts
+    path('artefacts/', include('artefacts.urls')),
+
+    # Pipelines
+    path('pipelines/', include('pipelines.urls')),
+
+    # Executions
+    path('executions/', include('executions.urls')),
     
     # Django-nyt notifications (requis par django-wiki)
     path('notifications/', include('django_nyt.urls')),

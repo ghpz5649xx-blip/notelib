@@ -17,7 +17,20 @@
     <!-- 📄 Contenu principal -->
     <main class="col-lg-9 col-md-12 wiki-article-container">
       <div class="wiki-article">
-        {{ content|default:"" }}
+        <div id="viewer"></div>
+
+        <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+          <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor-viewer.min.css">
+
+          <script>
+          document.addEventListener('DOMContentLoaded', function() {
+              const viewer = toastui.Editor.factory({
+                  el: document.querySelector('#viewer'),
+                  viewer: true,
+                  initialValue: `{{ article.current_revision.content|escapejs }}`
+              });
+          });
+        </script>
       </div>
     </main>
 

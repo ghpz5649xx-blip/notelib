@@ -62,11 +62,13 @@ INSTALLED_APPS = [
     'notelib',
     'features.apps.FeaturesConfig',
     'notebooks.apps.NotebooksConfig',
+    'artefacts.apps.ArtefactsConfig',
+    'pipelines.apps.PipelinesConfig',
+    'executions.apps.ExecutionsConfig',
 ]
 
 WIKI_MARKDOWN_KWARGS = {
     "extensions": [
-        "markdown.extensions.fenced_code",
         "markdown.extensions.tables",
         "markdown.extensions.toc",
     ]
