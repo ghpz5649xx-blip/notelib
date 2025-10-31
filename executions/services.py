@@ -20,6 +20,7 @@ from pipelines.models import Pipeline
 from pipelines.services import pipeline_service
 from artefacts.services import artefact_service
 from features.models import FeatureMeta
+import json
 
 logger = logging.getLogger("notelib")
 
@@ -225,7 +226,7 @@ class ExecutionService:
                     'pipeline_run_id': str(run.id),
                     'step_run_id': str(step.id),
                     'node_id': step.node_id,
-                    'inputs': inputs,
+                    'inputs': list(inputs.keys()),
                 }
             )
             
@@ -311,6 +312,11 @@ class ExecutionService:
                             f"Failed to load artefact {artefact_hash}: {e}"
                         )
                         raise
+
+        log = {
+            "node_id": node_id,
+            "input": inputs
+        }
         
         return inputs
     

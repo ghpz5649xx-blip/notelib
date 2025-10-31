@@ -1,0 +1,184 @@
+/* static/css/notelib_front.css */
+
+/* ========== Graph Visualization ========== */
+.graph-node {
+    cursor: move;
+    stroke: #555;
+    stroke-width: 2px;
+    fill: #f8f9fa;
+    transition: fill 0.2s;
+}
+
+.graph-node:hover {
+    fill: #e9ecef;
+}
+
+.graph-edge {
+    stroke: #999;
+    stroke-width: 2px;
+    marker-end: url(#arrowhead);
+}
+
+/* ========== Status Colors ========== */
+.status-success {
+    color: #28a745;
+}
+
+.status-failed {
+    color: #dc3545;
+}
+
+.status-running {
+    color: #ffc107;
+}
+
+.status-pending {
+    color: #6c757d;
+}
+
+/* ========== Timeline (Runs) ========== */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+    padding-left: 20px;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #6c757d;
+}
+
+.timeline-item.success::before {
+    border-color: #28a745;
+    background: #28a745;
+}
+
+.timeline-item.failed::before {
+    border-color: #dc3545;
+    background: #dc3545;
+}
+
+.timeline-item.running::before {
+    border-color: #ffc107;
+    background: #ffc107;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+/* ========== Features Palette ========== */
+#features-palette .list-group-item {
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+#features-palette .list-group-item:hover {
+    background-color: #f8f9fa;
+    border-left-color: #007bff;
+}
+
+#features-palette .list-group-item.active {
+    background-color: #e7f3ff;
+    border-left-color: #0056b3;
+}
+
+/* ========== Logs Display ========== */
+.logs-container {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.log-line {
+    padding: 2px 8px;
+    border-left: 3px solid transparent;
+}
+
+.log-line.error {
+    background-color: #f8d7da;
+    border-left-color: #dc3545;
+}
+
+.log-line.warning {
+    background-color: #fff3cd;
+    border-left-color: #ffc107;
+}
+
+.log-line.info {
+    border-left-color: #17a2b8;
+}
+
+/* ========== Artefacts Preview ========== */
+.artefact-preview {
+    max-width: 100%;
+    max-height: 500px;
+    overflow: auto;
+}
+
+.artefact-preview img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.artefact-preview pre {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* ========== Responsive Adjustments ========== */
+@media (max-width: 768px) {
+    #canvas {
+        height: 400px !important;
+    }
+    
+    .timeline {
+        padding-left: 20px;
+    }
+}
+
+/* ========== Utilities ========== */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.text-monospace {
+    font-family: 'Courier New', monospace;
+}
+
+.badge-xl {
+    font-size: 1rem;
+    padding: 0.5rem 1rem;
+}

@@ -1,0 +1,6 @@
+{
+    "pipeline": "c3eeeb77-a031-4fb7-9ee6-b4fe89ba969e",
+    "initiator": null,
+    "input_manifest":{"node_5":{"path":"/Users/stephanebugat/Documents/05-steph/01-perso/00-jupyter/notelib/travaux.csv"}},
+    "execution_mode": "sync"
+}

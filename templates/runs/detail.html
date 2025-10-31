@@ -1,0 +1,342 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Exécution - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/runs/">Exécutions</a></li>
+                    <li class="breadcrumb-item active" id="breadcrumb-id">...</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 id="run-title">
+                <i class="bi bi-play-circle"></i>
+                <span class="spinner-border spinner-border-sm"></span>
+            </h2>
+            <p class="text-muted" id="run-pipeline"></p>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group" id="action-buttons">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Métadonnées -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Informations</strong></div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th>Statut:</th>
+                            <td id="meta-status">-</td>
+                        </tr>
+                        <tr>
+                            <th>Mode:</th>
+                            <td id="meta-mode">-</td>
+                        </tr>
+                        <tr>
+                            <th>Initiateur:</th>
+                            <td id="meta-initiator">-</td>
+                        </tr>
+                        <tr>
+                            <th>Durée:</th>
+                            <td id="meta-duration">-</td>
+                        </tr>
+                        <tr>
+                            <th>Lancé le:</th>
+                            <td id="meta-created">-</td>
+                        </tr>
+                        <tr>
+                            <th>Terminé le:</th>
+                            <td id="meta-finished">-</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline steps -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Timeline des étapes</strong></div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div class="timeline" id="steps-timeline">
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Logs</strong>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAutoScroll()">
+                        <i class="bi bi-arrow-down-circle" id="autoscroll-icon"></i>
+                        Auto-scroll
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="logs-container bg-dark text-light p-3" 
+                         id="logs-container"
+                         style="max-height: 500px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;">
+                        <div class="text-center py-3">
+                            <div class="spinner-border spinner-border-sm text-light"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/notelib_api.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
+
+<script>
+let run = null;
+let runId = null;
+let pollingInterval = null;
+let autoScroll = true;
+
+async function loadRun() {
+    runId = window.location.pathname.split('/')[2];
+    run = await NoteLibAPI.get(`/api/runs/${runId}/`);
+    
+    if (!run) return;
+
+    // Header
+    document.getElementById('run-title').innerHTML = `
+        <i class="bi bi-play-circle"></i> Exécution ${run.id.substring(0, 8)}
+    `;
+    document.getElementById('breadcrumb-id').textContent = run.id.substring(0, 8);
+    document.getElementById('run-pipeline').textContent = `Pipeline: ${run.pipeline_name || '-'}`;
+
+    // Metadata
+    document.getElementById('meta-status').innerHTML = getStatusBadge(run.status);
+    document.getElementById('meta-mode').innerHTML = `<span class="badge bg-secondary">${run.execution_mode}</span>`;
+    document.getElementById('meta-initiator').textContent = run.initiator_username || '-';
+    document.getElementById('meta-duration').textContent = formatDuration(run.duration);
+    document.getElementById('meta-created').textContent = formatDate(run.created_at);
+    document.getElementById('meta-finished').textContent = run.finished_at ? formatDate(run.finished_at) : '-';
+
+    // Action buttons
+    renderActionButtons();
+
+    // Timeline
+    renderTimeline();
+
+    // Logs
+    loadLogs();
+}
+
+function renderActionButtons() {
+    const container = document.getElementById('action-buttons');
+    let buttons = [];
+
+    if (run.status === 'RUNNING' || run.status === 'PENDING') {
+        buttons.push(`
+            <button class="btn btn-danger" onclick="cancelRun()">
+                <i class="bi bi-x-circle"></i> Annuler
+            </button>
+        `);
+    }
+
+    if (run.status === 'FAILED' || run.status === 'CANCELLED') {
+        buttons.push(`
+            <button class="btn btn-warning" onclick="retryRun()">
+                <i class="bi bi-arrow-clockwise"></i> Relancer
+            </button>
+        `);
+    }
+
+    buttons.push(`
+        <button class="btn btn-outline-secondary" onclick="loadLogs()">
+            <i class="bi bi-arrow-clockwise"></i> Rafraîchir
+        </button>
+    `);
+
+    container.innerHTML = buttons.join('');
+}
+
+function renderTimeline() {
+    const container = document.getElementById('steps-timeline');
+    const steps = run.step_runs || [];
+
+    if (steps.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">Aucune étape</p>';
+        return;
+    }
+
+    container.innerHTML = steps.map(step => {
+        const statusClass = step.status.toLowerCase();
+        return `
+            <div class="timeline-item ${statusClass}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${step.node_id}</strong> - ${step.feature_name}
+                        <br>
+                        <small class="text-muted">${getStatusBadge(step.status)} 
+                        ${step.duration ? formatDuration(step.duration) : ''}</small>
+                    </div>
+                    ${step.artefact_hash ? `
+                        <a href="/artefacts/${step.artefact_hash}/" 
+                           class="btn btn-sm btn-outline-primary"
+                           title="Voir l'artefact">
+                            <i class="bi bi-archive"></i>
+                        </a>
+                    ` : ''}
+                </div>
+                ${step.error ? `
+                    <div class="alert alert-danger mt-2 small mb-0">
+                        <strong>Erreur:</strong> ${escapeHTML(step.error)}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadLogs() {
+    const logsData = await NoteLibAPI.get(`/api/runs/${runId}/logs/`);
+    if (!logsData) return;
+
+    const container = document.getElementById('logs-container');
+    let allLogs = [];
+
+    // Global logs
+    if (logsData.logs) {
+        allLogs.push(`=== RUN LOGS ===\n${logsData.logs}\n`);
+    }
+
+    // Step logs
+    if (logsData.steps) {
+        logsData.steps.forEach(step => {
+            allLogs.push(`\n=== STEP: ${step.node_id} (${step.status}) ===`);
+            
+            if (step.stdout) {
+                allLogs.push(`\n[STDOUT]\n${step.stdout}`);
+            }
+            
+            if (step.stderr) {
+                allLogs.push(`\n[STDERR]\n${step.stderr}`);
+            }
+            
+            if (step.error) {
+                allLogs.push(`\n[ERROR]\n${step.error}`);
+            }
+        });
+    }
+
+    const logsText = allLogs.join('\n');
+    container.innerHTML = `<pre class="mb-0">${escapeHTML(logsText) || 'Aucun log disponible'}</pre>`;
+
+    // Auto-scroll
+    if (autoScroll) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+async function cancelRun() {
+    if (!confirm('Annuler cette exécution ?')) return;
+    
+    const result = await NoteLibAPI.post(`/api/runs/${runId}/cancel/`);
+    if (result) {
+        alert('Exécution annulée');
+        stopPolling();
+        loadRun();
+    }
+}
+
+async function retryRun() {
+    if (!confirm('Relancer cette exécution ?')) return;
+    
+    const result = await NoteLibAPI.post(`/api/runs/${runId}/retry/`);
+    if (result) {
+        alert('Nouvelle exécution lancée');
+        window.location.href = `/runs/${result.id}/`;
+    }
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const icon = document.getElementById('autoscroll-icon');
+    icon.className = autoScroll ? 'bi bi-arrow-down-circle-fill' : 'bi bi-arrow-down-circle';
+}
+
+function startPolling() {
+    // Poll toutes les 2s si running/pending
+    pollingInterval = setInterval(() => {
+        if (run.status === 'RUNNING' || run.status === 'PENDING') {
+            loadRun();
+        } else {
+            stopPolling();
+        }
+    }, 2000);
+}
+
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'PENDING': '<span class="badge bg-secondary status-pending">⏳ En attente</span>',
+        'RUNNING': '<span class="badge bg-warning text-dark status-running">▶️ En cours</span>',
+        'SUCCESS': '<span class="badge bg-success status-success">✓ Succès</span>',
+        'FAILED': '<span class="badge bg-danger status-failed">✗ Échec</span>',
+        'SKIPPED': '<span class="badge bg-secondary">⊘ Ignoré</span>',
+        'CANCELLED': '<span class="badge bg-dark">⊗ Annulé</span>'
+    };
+    return badges[status] || status;
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '-';
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}m ${secs}s`;
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadRun();
+    startPolling();
+});
+
+window.addEventListener('beforeunload', stopPolling);
+</script>
+{% endblock %}

@@ -18,20 +18,22 @@ urlpatterns = [
     path('notebooks/', include('notebooks.urls')),
 
     # Artefacts
-    path('artefacts/', include('artefacts.urls')),
+    path('api/artefacts/', include('artefacts.urls')),
 
     # Pipelines
-    path('pipelines/', include('pipelines.urls')),
+    path('api/pipelines/', include('pipelines.urls')),
 
     # Executions
-    path('executions/', include('executions.urls')),
+    path('api/runs/', include('executions.urls')),
     
     # Django-nyt notifications (requis par django-wiki)
     path('notifications/', include('django_nyt.urls')),
     
     # Wiki URLs - accessible à la racine
-    path('', get_wiki_pattern()),
+    path('wiki/', get_wiki_pattern()),
 
+    # Front end racine
+    path('', include('frontend.urls')),
 ]
 
 # Servir les fichiers média en développement

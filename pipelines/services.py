@@ -52,6 +52,8 @@ class PipelineService:
         5. Pas de nodes isolés (sauf entrées/sorties)
         """
         errors = []
+
+        logger.info(f"graph :{graph}")
         
         # 1. Vérification structure
         if not isinstance(graph, dict):
@@ -71,6 +73,7 @@ class PipelineService:
         
         # Vérification nodes valides
         node_ids = set()
+        logger.info(f"nodes :{node_ids}")
         for idx, node in enumerate(nodes):
             if not isinstance(node, dict):
                 errors.append(f"Node {idx} is not a dictionary")

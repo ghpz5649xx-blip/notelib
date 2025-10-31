@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'artefacts.apps.ArtefactsConfig',
     'pipelines.apps.PipelinesConfig',
     'executions.apps.ExecutionsConfig',
+    'frontend.apps.FrontendConfig'
 ]
 
 WIKI_MARKDOWN_KWARGS = {
@@ -177,3 +178,4 @@ WIKI_EDITOR = 'notelib.editors.ToastUIEditor'
 
 # Configuration du stockage des features
 FEATURE_STORAGE_DIR = os.path.join(BASE_DIR, 'storage', 'features')
+

@@ -41,6 +41,21 @@ class PipelineViewSet(viewsets.ModelViewSet):
     
     serializer_class = PipelineSerializer
     permission_classes = [IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # pipeline = request.data
+        # pipeline['owner'] = request.user
+        serializer = self.get_serializer(instance, data=request.data, partial=False)
+
+        if not serializer.is_valid():
+            logger.error("❌ Serializer errors: %s", serializer.errors)
+            print("❌ Serializer errors:", serializer.errors)  # Affichage direct en console
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        self.perform_update(serializer)
+        logger.info("✅ Pipeline updated successfully: %s", instance.name)
+        return Response(serializer.data)
     
     def get_queryset(self):
         """Filtre par propriétaire si non-admin."""

@@ -1,0 +1,260 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Pipeline - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/pipelines/">Pipelines</a></li>
+                    <li class="breadcrumb-item active" id="breadcrumb-name">...</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 id="pipeline-name">
+                <i class="bi bi-diagram-3"></i>
+                <span class="spinner-border spinner-border-sm"></span>
+            </h2>
+            <p class="text-muted" id="pipeline-description"></p>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="editPipeline()">
+                    <i class="bi bi-pencil"></i> Éditer
+                </button>
+                <button class="btn btn-success" onclick="validatePipeline()">
+                    <i class="bi bi-check-lg"></i> Valider
+                </button>
+                <button class="btn btn-info" onclick="exportPipeline()">
+                    <i class="bi bi-download"></i> Exporter
+                </button>
+                <button class="btn btn-warning" onclick="executePipeline()">
+                    <i class="bi bi-play"></i> Exécuter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Métadonnées -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Informations</strong></div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th>Nodes:</th>
+                            <td id="meta-nodes">-</td>
+                        </tr>
+                        <tr>
+                            <th>Edges:</th>
+                            <td id="meta-edges">-</td>
+                        </tr>
+                        <tr>
+                            <th>Valide:</th>
+                            <td id="meta-valid">-</td>
+                        </tr>
+                        <tr>
+                            <th>Version:</th>
+                            <td id="meta-version">-</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualisation graphe -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Visualisation</strong></div>
+                <div class="card-body">
+                    <svg id="pipeline-graph" class="border rounded w-100" height="400" style="background: #f8f9fa;">
+                        <text x="50%" y="50%" text-anchor="middle" fill="#999">Chargement...</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des nodes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Nodes</strong></div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0" id="nodes-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Feature</th>
+                                <th>Inputs</th>
+                                <th>Outputs</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/notelib_api.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
+
+<script>
+let pipeline = null;
+
+async function loadPipeline() {
+    const pipelineId = window.location.pathname.split('/')[2];
+    pipeline = await NoteLibAPI.get(`/api/pipelines/${pipelineId}/`);
+    
+    if (!pipeline) return;
+
+    // Metadata
+    document.getElementById('pipeline-name').innerHTML = `<i class="bi bi-diagram-3"></i> ${pipeline.name}`;
+    document.getElementById('breadcrumb-name').textContent = pipeline.name;
+    document.getElementById('pipeline-description').textContent = pipeline.description || 'Aucune description';
+    document.getElementById('meta-nodes').textContent = pipeline.node_count || 0;
+    document.getElementById('meta-edges').textContent = pipeline.edge_count || 0;
+    document.getElementById('meta-valid').innerHTML = pipeline.is_valid 
+        ? '<span class="badge bg-success">Oui</span>' 
+        : '<span class="badge bg-danger">Non</span>';
+    document.getElementById('meta-version').textContent = `v${pipeline.version}`;
+
+    // Nodes table
+    const tbody = document.querySelector('#nodes-table tbody');
+    tbody.innerHTML = (pipeline.graph.nodes || []).map(n => `
+        <tr>
+            <td><code>${n.id}</code></td>
+            <td><strong>${n.feature_name || 'N/A'}</strong></td>
+            <td>${(n.ports_in || []).join(', ') || '-'}</td>
+            <td>${(n.ports_out || []).join(', ') || '-'}</td>
+        </tr>
+    `).join('');
+
+    // Graph viz
+    renderGraph(pipeline.graph);
+}
+
+function renderGraph(graph) {
+    const svg = document.getElementById('pipeline-graph');
+    const width = svg.clientWidth;
+    const height = 400;
+    
+    svg.innerHTML = '';
+
+    const nodes = graph.nodes || [];
+    const edges = graph.edges || [];
+
+    if (nodes.length === 0) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', '50%');
+        text.setAttribute('y', '50%');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', '#999');
+        text.textContent = 'Pipeline vide';
+        svg.appendChild(text);
+        return;
+    }
+
+    // Positions simples (layout en grille)
+    const cols = Math.ceil(Math.sqrt(nodes.length));
+    const spacing = { x: width / (cols + 1), y: height / (Math.ceil(nodes.length / cols) + 1) };
+
+    nodes.forEach((node, i) => {
+        node._x = node.ui?.x || spacing.x * (1 + (i % cols));
+        node._y = node.ui?.y || spacing.y * (1 + Math.floor(i / cols));
+    });
+
+    // Draw edges
+    edges.forEach(edge => {
+        const from = nodes.find(n => n.id === edge.from);
+        const to = nodes.find(n => n.id === edge.to);
+        
+        if (from && to) {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', from._x);
+            line.setAttribute('y1', from._y);
+            line.setAttribute('x2', to._x);
+            line.setAttribute('y2', to._y);
+            line.setAttribute('class', 'graph-edge');
+            svg.appendChild(line);
+        }
+    });
+
+    // Draw nodes
+    nodes.forEach(node => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', node._x);
+        circle.setAttribute('cy', node._y);
+        circle.setAttribute('r', 30);
+        circle.setAttribute('class', 'graph-node');
+        
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', node._x);
+        text.setAttribute('y', node._y + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '12');
+        text.textContent = node.id;
+        
+        g.appendChild(circle);
+        g.appendChild(text);
+        svg.appendChild(g);
+    });
+}
+
+function editPipeline() {
+    window.location.href = window.location.pathname + '/edit/';
+}
+
+async function validatePipeline() {
+    const pipelineId = pipeline.id;
+    const result = await NoteLibAPI.post(`/api/pipelines/${pipelineId}/validate/`);
+    if (result) {
+        alert(result.status === 'valid' ? 'Pipeline valide ✓' : `Invalide: ${result.errors.join(', ')}`);
+        loadPipeline();
+    }
+}
+
+async function exportPipeline() {
+    const pipelineId = pipeline.id;
+    const result = await NoteLibAPI.get(`/api/pipelines/${pipelineId}/export/`);
+    if (result) {
+        const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pipeline_${pipeline.name}.json`;
+        a.click();
+    }
+}
+
+async function executePipeline() {
+    if (!confirm('Lancer l\'exécution ?')) return;
+    
+    const result = await NoteLibAPI.put(`/api/executions/${pipeline.id}/`, {
+        input_manifest: {},
+        execution_mode: 'sync'
+    });
+    
+    if (result) {
+        alert('Exécution lancée');
+        window.location.href = `/runs/${result.id}/`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadPipeline);
+</script>
+{% endblock %}

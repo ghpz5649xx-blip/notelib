@@ -38,6 +38,8 @@ class PipelineSerializer(serializers.ModelSerializer):
             'version',
             'created_at',
             'updated_at',
+            'owner',
+            'owner_username',
         ]
     
     def get_node_count(self, obj):

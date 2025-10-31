@@ -1,0 +1,227 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Artefacts - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>
+                <i class="bi bi-archive"></i>
+                Artefacts
+            </h2>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-outline-info" onclick="loadStats()">
+                <i class="bi bi-graph-up"></i>
+                Statistiques
+            </button>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" 
+                   id="search-artefact" 
+                   class="form-control" 
+                   placeholder="🔍 Rechercher par hash ou feature...">
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="filter-feature">
+                <option value="">Toutes les features</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0" id="artefacts-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Hash</th>
+                                    <th>Feature</th>
+                                    <th>Taille</th>
+                                    <th>Compression</th>
+                                    <th>Refs</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center py-4">
+                                        <div class="spinner-border text-primary"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale de confirmation suppression -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirmer la suppression</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Voulez-vous vraiment supprimer cet artefact ?</p>
+                <p><code id="delete-hash"></code></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">Supprimer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/notelib_api.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
+
+<script>
+let artefacts = [];
+let deleteHash = null;
+
+async function loadArtefacts() {
+    const data = await NoteLibAPI.get('/api/artefacts/');
+    if (data) {
+        artefacts = data.results || data;
+        renderArtefacts();
+        loadFeatureFilter();
+    }
+}
+
+function renderArtefacts() {
+    const tbody = document.querySelector('#artefacts-table tbody');
+    const searchTerm = document.getElementById('search-artefact').value.toLowerCase();
+    const featureFilter = document.getElementById('filter-feature').value;
+    
+    const filtered = artefacts.filter(a => {
+        const matchSearch = !searchTerm || 
+            a.hash.toLowerCase().includes(searchTerm) ||
+            (a.feature_name && a.feature_name.toLowerCase().includes(searchTerm));
+        
+        const matchFeature = !featureFilter || a.feature === featureFilter;
+        
+        return matchSearch && matchFeature;
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Aucun artefact trouvé</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(a => `
+        <tr>
+            <td><code class="small">${a.hash.substring(0, 12)}...</code></td>
+            <td><strong>${a.feature_name || '-'}</strong></td>
+            <td>${formatBytes(a.size)}</td>
+            <td>
+                ${a.compression_ratio 
+                    ? `<span class="badge bg-info">${(a.compression_ratio * 100).toFixed(0)}%</span>` 
+                    : '-'}
+            </td>
+            <td><span class="badge ${a.can_delete ? 'bg-success' : 'bg-warning'}">${a.ref_count}</span></td>
+            <td><small class="text-muted">${formatDate(a.created_at)}</small></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <a href="/artefacts/${a.hash}/" class="btn btn-outline-primary" title="Détails">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <button class="btn btn-outline-success" onclick="downloadArtefact('${a.hash}')" title="Télécharger">
+                        <i class="bi bi-download"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" 
+                            onclick="showDeleteModal('${a.hash}')" 
+                            ${!a.can_delete ? 'disabled' : ''}
+                            title="${a.can_delete ? 'Supprimer' : 'Artefact référencé'}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function loadFeatureFilter() {
+    const select = document.getElementById('filter-feature');
+    const uniqueFeatures = [...new Set(artefacts.map(a => a.feature_name).filter(Boolean))];
+    
+    select.innerHTML = '<option value="">Toutes les features</option>' +
+        uniqueFeatures.map(f => `<option value="${f}">${f}</option>`).join('');
+}
+
+async function downloadArtefact(hash) {
+    await NoteLibAPI.download(`/api/artefacts/${hash}/download/`, `artefact_${hash.substring(0, 8)}.zst`);
+}
+
+function showDeleteModal(hash) {
+    deleteHash = hash;
+    document.getElementById('delete-hash').textContent = hash;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+async function confirmDelete() {
+    if (!deleteHash) return;
+    
+    const result = await NoteLibAPI.del(`/api/artefacts/${deleteHash}/`);
+    if (result !== null) {
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+        loadArtefacts();
+    }
+}
+
+async function loadStats() {
+    const stats = await NoteLibAPI.get('/api/artefacts/stats/');
+    if (stats) {
+        alert(`Statistiques:
+- Total: ${stats.total_count} artefacts
+- Taille totale: ${formatBytes(stats.total_size)}
+- Orphelins: ${stats.orphans}
+- Ratio compression moyen: ${(stats.avg_compression_ratio * 100).toFixed(1)}%`);
+    }
+}
+
+function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadArtefacts();
+    
+    document.getElementById('search-artefact').addEventListener('input', renderArtefacts);
+    document.getElementById('filter-feature').addEventListener('change', renderArtefacts);
+});
+</script>
+{% endblock %}

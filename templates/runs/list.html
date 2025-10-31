@@ -1,0 +1,237 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Exécutions - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>
+                <i class="bi bi-play-circle"></i>
+                Exécutions
+            </h2>
+        </div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <select class="form-select" id="filter-pipeline">
+                <option value="">Tous les pipelines</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="filter-status">
+                <option value="">Tous les statuts</option>
+                <option value="PENDING">En attente</option>
+                <option value="RUNNING">En cours</option>
+                <option value="SUCCESS">Succès</option>
+                <option value="FAILED">Échec</option>
+                <option value="CANCELLED">Annulé</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="loadRuns()">
+                <i class="bi bi-arrow-clockwise"></i> Actualiser
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="runs-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Pipeline</th>
+                                    <th>Statut</th>
+                                    <th>Mode</th>
+                                    <th>Durée</th>
+                                    <th>Lancé le</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center py-4">
+                                        <div class="spinner-border text-primary"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/notelib_api.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
+
+<script>
+let runs = [];
+let pipelines = [];
+let autoRefreshInterval = null;
+
+async function loadRuns() {
+    const pipelineFilter = document.getElementById('filter-pipeline').value;
+    const statusFilter = document.getElementById('filter-status').value;
+    
+    let url = '/api/runs/';
+    const params = new URLSearchParams();
+    if (pipelineFilter) params.append('pipeline', pipelineFilter);
+    if (statusFilter) params.append('status', statusFilter);
+    
+    if (params.toString()) url += '?' + params.toString();
+    
+    const data = await NoteLibAPI.get(url);
+    if (data) {
+        runs = data.results || data;
+        renderRuns();
+    }
+}
+
+async function loadPipelines() {
+    const data = await NoteLibAPI.get('/api/pipelines/');
+    if (data) {
+        pipelines = data.results || data;
+        
+        const select = document.getElementById('filter-pipeline');
+        select.innerHTML = '<option value="">Tous les pipelines</option>' +
+            pipelines.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    }
+}
+
+function renderRuns() {
+    const tbody = document.querySelector('#runs-table tbody');
+    
+    if (runs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Aucune exécution</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = runs.map(r => `
+        <tr>
+            <td><code class="small">${r.id.substring(0, 8)}</code></td>
+            <td><strong>${r.pipeline_name || '-'}</strong></td>
+            <td>${getStatusBadge(r.status)}</td>
+            <td><span class="badge bg-secondary">${r.execution_mode}</span></td>
+            <td>${formatDuration(r.duration)}</td>
+            <td><small class="text-muted">${formatDate(r.created_at)}</small></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <a href="/runs/${r.id}/" class="btn btn-outline-primary" title="Détails">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    ${r.status === 'RUNNING' || r.status === 'PENDING' ? `
+                        <button class="btn btn-outline-danger" onclick="cancelRun('${r.id}')" title="Annuler">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    ` : ''}
+                    ${r.status === 'FAILED' || r.status === 'CANCELLED' ? `
+                        <button class="btn btn-outline-warning" onclick="retryRun('${r.id}')" title="Relancer">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'PENDING': '<span class="badge bg-secondary status-pending">⏳ En attente</span>',
+        'RUNNING': '<span class="badge bg-warning status-running">▶️ En cours</span>',
+        'SUCCESS': '<span class="badge bg-success status-success">✓ Succès</span>',
+        'FAILED': '<span class="badge bg-danger status-failed">✗ Échec</span>',
+        'CANCELLED': '<span class="badge bg-dark">⊗ Annulé</span>'
+    };
+    return badges[status] || status;
+}
+
+async function cancelRun(runId) {
+    if (!confirm('Annuler cette exécution ?')) return;
+    
+    const result = await NoteLibAPI.post(`/api/runs/${runId}/cancel/`);
+    if (result) {
+        alert('Exécution annulée');
+        loadRuns();
+    }
+}
+
+async function retryRun(runId) {
+    if (!confirm('Relancer cette exécution ?')) return;
+    
+    const result = await NoteLibAPI.post(`/api/runs/${runId}/retry/`);
+    if (result) {
+        alert('Nouvelle exécution lancée');
+        window.location.href = `/executions/${result.id}/`;
+    }
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '-';
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}m ${secs}s`;
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) return 'À l\'instant';
+    if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
+    if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)} h`;
+    
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function startAutoRefresh() {
+    // Auto-refresh toutes les 5s si des runs sont en cours
+    autoRefreshInterval = setInterval(() => {
+        const hasRunning = runs.some(r => r.status === 'RUNNING' || r.status === 'PENDING');
+        if (hasRunning) {
+            loadRuns();
+        }
+    }, 5000);
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadPipelines();
+    loadRuns();
+    startAutoRefresh();
+    
+    document.getElementById('filter-pipeline').addEventListener('change', loadRuns);
+    document.getElementById('filter-status').addEventListener('change', loadRuns);
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', stopAutoRefresh);
+</script>
+{% endblock %}

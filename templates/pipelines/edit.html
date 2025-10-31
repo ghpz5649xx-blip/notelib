@@ -1,0 +1,356 @@
+{% extends "wiki/base.html" %}
+{% load static %}
+
+{% block wiki_site_title %}Éditer Pipeline - NoteLib{% endblock %}
+
+{% block wiki_contents %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col-12">
+            <h2 id="editor-title">
+                <i class="bi bi-pencil"></i>
+                Éditeur de Pipeline
+            </h2>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Palette de features -->
+        <div class="col-3">
+            <div class="card shadow-sm" style="height: 700px; overflow-y: auto;">
+                <div class="card-header"><strong>Features disponibles</strong></div>
+                <div class="list-group list-group-flush" id="features-palette">
+                    <div class="p-3 text-center">
+                        <div class="spinner-border spinner-border-sm"></div>
+                        Chargement...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas SVG -->
+        <div class="col-9">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Canvas</strong>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-success" onclick="savePipeline()">
+                            <i class="bi bi-save"></i> Enregistrer
+                        </button>
+                        <button class="btn btn-primary" onclick="validatePipeline()">
+                            <i class="bi bi-check-lg"></i> Valider
+                        </button>
+                        <button class="btn btn-warning" onclick="executePipeline()">
+                            <i class="bi bi-play"></i> Exécuter
+                        </button>
+                        <button class="btn btn-danger" onclick="clearCanvas()">
+                            <i class="bi bi-trash"></i> Effacer
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <svg id="canvas" 
+                         class="border rounded w-100" 
+                         height="650" 
+                         style="background: #fafafa; cursor: crosshair;">
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- Mode d'édition -->
+            <div class="mt-2">
+                <small class="text-muted">
+                    <strong>Mode:</strong> 
+                    <span id="editor-mode">Clic = Ajouter node | Clic sur 2 nodes = Créer edge</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/notelib_api.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
+
+<script>
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+let pipeline = null;
+let features = [];
+let graph = { nodes: [], edges: [] };
+let selectedFeature = null;
+let selectedNodes = [];
+let draggedNode = null;
+let nodeIdCounter = 1;
+
+// ========== INIT ==========
+async function init() {
+    const pipelineId = window.location.pathname.split('/')[2];
+    
+    // Load pipeline
+    pipeline = await NoteLibAPI.get(`/api/pipelines/${pipelineId}/`);
+    if (pipeline) {
+        document.getElementById('editor-title').innerHTML = 
+            `<i class="bi bi-pencil"></i> Éditer: ${pipeline.name}`;
+        graph = pipeline.graph || { nodes: [], edges: [] };
+        nodeIdCounter = graph.nodes.length + 1;
+    }
+
+    // Load features
+    const featuresData = await NoteLibAPI.get('/api/features/list/');
+    if (featuresData) {
+        features = featuresData.features || [];
+        renderFeaturesPalette();
+    }
+
+    // Setup canvas
+    setupCanvas();
+    renderGraph();
+}
+
+// ========== FEATURES PALETTE ==========
+function renderFeaturesPalette() {
+    const palette = document.getElementById('features-palette');
+    palette.innerHTML = features.map(f => `
+        <button 
+            class="list-group-item list-group-item-action"
+            draggable="true"
+            ondragstart="onFeatureDragStart(event, '${f.hash}')"
+        >
+            <strong>${f.name}</strong>
+            <br><small class="text-muted">${f.inputs.join(', ') || 'no inputs'} → ${f.outputs.join(', ')}</small>
+        </button>
+    `).join('');
+}
+
+function onFeatureDragStart(e, hash) {
+    const feature = features.find(f => f.hash === hash);
+    e.dataTransfer.setData('application/json', JSON.stringify(feature));
+    e.dataTransfer.effectAllowed = 'copy';
+}
+
+// ========== CANVAS SETUP ==========
+function setupCanvas() {
+    const canvas = document.getElementById('canvas');
+    
+    // Empêche le comportement par défaut pour permettre le drop
+    canvas.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    // Drop d’un feature sur le canvas
+    canvas.addEventListener('drop', (e) => {
+        e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const data = e.dataTransfer.getData('application/json');
+        if (!data) return;
+
+        const feature = JSON.parse(data);
+        selectedFeature = feature;
+
+        console.log(`Drop feature "${feature.name}" à x:${x}, y:${y}`);
+        addNode(x, y);
+    });
+
+    // Drag de nodes existants dans le canvas
+    canvas.addEventListener('mousedown', (e) => {
+        const target = e.target;
+        if (target.classList.contains('graph-node')) {
+            draggedNode = target.dataset.nodeId;
+        }
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggedNode) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const node = graph.nodes.find(n => n.id === draggedNode);
+            if (node) {
+                node.ui = { x, y };
+                renderGraph();
+            }
+        }
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+        draggedNode = null;
+    });
+}
+
+
+// ========== GRAPH OPERATIONS ==========
+function addNode(x, y) {
+    const nodeId = `node_${nodeIdCounter++}`;
+    const node = {
+        id: nodeId,
+        feature_name: selectedFeature.name,
+        feature_hash: selectedFeature.hash,
+        config: {},
+        ports_in: selectedFeature.inputs,
+        ports_out: selectedFeature.outputs,
+        ui: { x, y }
+    };
+    
+    graph.nodes.push(node);
+    renderGraph();
+}
+
+function toggleNodeSelection(nodeId) {
+    const idx = selectedNodes.indexOf(nodeId);
+    if (idx >= 0) {
+        selectedNodes.splice(idx, 1);
+    } else {
+        selectedNodes.push(nodeId);
+    }
+    
+    // Create edge if 2 nodes selected
+    if (selectedNodes.length === 2) {
+        createEdge(selectedNodes[0], selectedNodes[1]);
+        selectedNodes = [];
+    }
+    
+    renderGraph();
+}
+
+function createEdge(fromId, toId) {
+    const edgeId = `edge_${graph.edges.length + 1}`;
+    const from_node = graph.nodes.find(n => n.id === fromId)
+    const to_node = graph.nodes.find(n => n.id === toId)
+    graph.edges.push({
+        id: edgeId,
+        from: fromId,
+        to: toId,
+        out_port: from_node.ports_out[0],
+        in_port: to_node.ports_in[0]
+    });
+}
+
+function deleteNode(nodeId) {
+    graph.nodes = graph.nodes.filter(n => n.id !== nodeId);
+    graph.edges = graph.edges.filter(e => e.from !== nodeId && e.to !== nodeId);
+    renderGraph();
+}
+
+function clearCanvas() {
+    if (!confirm('Effacer tout le canvas ?')) return;
+    graph = { nodes: [], edges: [] };
+    renderGraph();
+}
+
+// ========== RENDER ==========
+function renderGraph() {
+    const canvas = document.getElementById('canvas');
+    canvas.innerHTML = '';
+    
+    // Draw edges
+    graph.edges.forEach(edge => {
+        const from = graph.nodes.find(n => n.id === edge.from);
+        const to = graph.nodes.find(n => n.id === edge.to);
+        
+        if (from && to) {
+            const line = document.createElementNS(SVG_NS, 'line');
+            line.setAttribute('x1', from.ui.x);
+            line.setAttribute('y1', from.ui.y);
+            line.setAttribute('x2', to.ui.x);
+            line.setAttribute('y2', to.ui.y);
+            line.setAttribute('class', 'graph-edge');
+            canvas.appendChild(line);
+        }
+    });
+    
+    // Draw nodes
+    graph.nodes.forEach(node => {
+        const g = document.createElementNS(SVG_NS, 'g');
+        
+        const circle = document.createElementNS(SVG_NS, 'circle');
+        circle.setAttribute('cx', node.ui.x);
+        circle.setAttribute('cy', node.ui.y);
+        circle.setAttribute('r', 35);
+        circle.setAttribute('class', 'graph-node');
+        circle.dataset.nodeId = node.id;
+        circle.style.fill = selectedNodes.includes(node.id) ? '#ffc107' : '#f8f9fa';
+        circle.onclick = () => toggleNodeSelection(node.id);
+        
+        const text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('x', node.ui.x);
+        text.setAttribute('y', node.ui.y + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '11');
+        text.textContent = node.feature_name;
+        
+        // Delete button
+        const deleteBtn = document.createElementNS(SVG_NS, 'circle');
+        deleteBtn.setAttribute('cx', node.ui.x + 30);
+        deleteBtn.setAttribute('cy', node.ui.y - 30);
+        deleteBtn.setAttribute('r', 10);
+        deleteBtn.setAttribute('fill', '#dc3545');
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.onclick = (e) => { e.stopPropagation(); deleteNode(node.id); };
+        
+        const deleteX = document.createElementNS(SVG_NS, 'text');
+        deleteX.setAttribute('x', node.ui.x + 30);
+        deleteX.setAttribute('y', node.ui.y - 25);
+        deleteX.setAttribute('text-anchor', 'middle');
+        deleteX.setAttribute('fill', 'white');
+        deleteX.setAttribute('font-size', '12');
+        deleteX.textContent = '×';
+        deleteX.style.pointerEvents = 'none';
+        
+        g.appendChild(circle);
+        g.appendChild(text);
+        g.appendChild(deleteBtn);
+        g.appendChild(deleteX);
+        canvas.appendChild(g);
+    });
+}
+
+// ========== SAVE/VALIDATE/EXECUTE ==========
+async function savePipeline() {
+    pipeline.graph = graph;
+    const payload = {
+        name: pipeline.name,
+        description: pipeline.description || "",
+        graph: pipeline.graph,
+        tags: pipeline.tags || { none: "none" }
+    }
+    console.log("Payload sent to API:", JSON.stringify(payload, null, 2));
+    const result = await NoteLibAPI.put(`/api/pipelines/${pipeline.id}/`, payload);
+    if (result) {
+        alert('Pipeline enregistré ✓');
+    }
+}
+
+async function validatePipeline() {
+    await savePipeline();
+    const result = await NoteLibAPI.post(`/api/pipelines/${pipeline.id}/validate/`);
+    if (result) {
+        alert(result.status === 'valid' ? 'Pipeline valide ✓' : `Erreurs: ${result.errors.join(', ')}`);
+    }
+}
+
+async function executePipeline() {
+    if (!confirm('Enregistrer et exécuter ?')) return;
+    await savePipeline();
+    
+    const result = await NoteLibAPI.post(`/api/executions/${pipeline.id}/`, {
+        input_manifest: {},
+        execution_mode: 'sync'
+    });
+    
+    if (result) {
+        alert('Exécution lancée');
+        window.location.href = `/runs/${result.id}/`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+{% endblock %}
+
