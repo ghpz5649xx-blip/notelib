@@ -43,7 +43,8 @@ class ExecutionService:
         pipeline: Pipeline,
         input_manifest: Dict[str, Any],
         initiator,
-        execution_mode: str = 'sync'
+        execution_mode: str = 'sync',
+        description: str = None
     ) -> PipelineRun:
         """
         Crée un PipelineRun et ses StepRuns.
@@ -77,6 +78,7 @@ class ExecutionService:
                 input_manifest=input_manifest,
                 execution_mode=execution_mode,
                 status='PENDING',
+                description=description,
             )
             
             # Création des StepRuns pour chaque node
@@ -85,6 +87,7 @@ class ExecutionService:
                 node_id = node['id']
                 feature_name = node.get('feature_name')
                 feature_hash = node.get('feature_hash')
+                ports_in = node.get('ports_in')
                 
                 # Récupération de la feature
                 if feature_hash:
@@ -108,6 +111,7 @@ class ExecutionService:
                     feature_name=feature.name,
                     feature_hash=feature.hash,
                     status='PENDING',
+                    inputs={k: v for k, v in (item.split(":", 1) for item in ports_in)}
                 )
             
             logger.info(
@@ -217,6 +221,8 @@ class ExecutionService:
             # 3. Désérialisation du résultat
             import cloudpickle
             result_obj = cloudpickle.loads(result_bytes)
+
+            output = self._get_outputs(run,step)
             
             # 4. Création de l'artefact
             artefact = artefact_service.create_artefact(
@@ -227,6 +233,7 @@ class ExecutionService:
                     'step_run_id': str(step.id),
                     'node_id': step.node_id,
                     'inputs': list(inputs.keys()),
+                    'outputs': output
                 }
             )
             
@@ -313,13 +320,40 @@ class ExecutionService:
                         )
                         raise
 
-        log = {
-            "node_id": node_id,
-            "input": inputs
-        }
-        
+        # nettoyage des keys du dictionnaire d'imput
+        clean_inputs = {}
+        for k,v in inputs.items():
+            k_clean = k.split(":")[0]
+            clean_inputs[k_clean] = v
+        inputs = clean_inputs
+
         return inputs
     
+    def _get_outputs(
+            self,
+            run: Pipeline,
+            step: StepRun
+    ) -> Dict[str, Any]:
+        """
+        Fourni le nom et le type de l'artefact produit pour une step donnée
+        
+        Args:
+            run: PipelineRun
+            step: StepRun
+        
+        Returns:
+            Dictionnaire de l'output
+        """
+
+        node_id = step.node_id
+        nodes = run.pipeline.graph.get("nodes")
+        for node in nodes:
+            if node.get('id') == node_id: 
+                return node.get('ports_out')[0]
+        
+        return None
+        
+
     def cancel_run(self, run_id: str) -> PipelineRun:
         """
         Annule une exécution en cours.

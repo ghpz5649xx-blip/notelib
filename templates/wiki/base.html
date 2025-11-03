@@ -24,9 +24,19 @@
             <i class="fas fa-book"></i> Notebooks
         </a>
     </li>
+    <!-- <li class="nav-item">
+        <a class="nav-link" href="{% url 'frontend:artefacts_list' %}">
+            <i class="fas fa-cubes"></i> Artefacts
+        </a>
+    </li> -->
     <li class="nav-item">
-        <a class="nav-link" href="{% url 'notebooks:upload' %}">
-            <i class="fas fa-upload"></i> Upload
+        <a class="nav-link" href="{% url 'frontend:pipelines_list' %}">
+            <i class="fas fa-tools"></i> Pipelines
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'frontend:runs_list' %}">
+            <i class="fas fa-running"></i> Runs
         </a>
     </li>
 </ul>

@@ -10,24 +10,6 @@ const PipelinesManager = (function() {
     let currentPipeline = null;
 
     /**
-     * Ferme une modale (compatible Bootstrap 4 et 5)
-     */
-    function hideModal(modalId) {
-        const el = document.getElementById(modalId);
-        if (!el) return;
-
-        // Bootstrap 5
-        if (window.bootstrap && bootstrap.Modal && bootstrap.Modal.getInstance) {
-            const instance = bootstrap.Modal.getInstance(el);
-            if (instance) instance.hide();
-        }
-        // Bootstrap 4 (via jQuery)
-        else if (window.jQuery) {
-            $(el).modal('hide');
-        }
-    }
-
-    /**
      * Charge la liste des pipelines
      */
     async function loadPipelines() {
@@ -99,9 +81,9 @@ const PipelinesManager = (function() {
                                     <a href="/pipelines/${p.id}/edit/" class="btn btn-outline-secondary" title="Éditer">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <a href="/runs/${p.id}/launch/" class="btn btn-outline-secondary" title="Exécuter">
+                                    <button class="btn btn-outline-success" onclick="PipelinesManager.executePipeline('${p.id}')" title="Exécuter">
                                         <i class="bi bi-play"></i>
-                                    </a>
+                                    </button>
                                     <button class="btn btn-outline-info" onclick="PipelinesManager.duplicatePipeline('${p.id}')" title="Dupliquer">
                                         <i class="bi bi-files"></i>
                                     </button>
@@ -121,27 +103,19 @@ const PipelinesManager = (function() {
      * Affiche la modale de création
      */
     function showCreateModal() {
-        const modalElement = document.getElementById('createPipelineModal');
-        if (!modalElement) return;
-
-        // Bootstrap 5
-        if (window.bootstrap && bootstrap.Modal) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-        }
-        // Bootstrap 4 (via jQuery)
-        else if (window.jQuery) {
-            $(modalElement).modal('show');
-        }
+        const modal = new bootstrap.Modal(document.getElementById('createPipelineModal'));
+        modal.show();
     }
 
     /**
      * Crée un nouveau pipeline
      */
     async function createPipeline(event) {
-        console.log('Pipeline Manager : createPipeline');
-        event.preventDefault();
 
+        console.log('Pipeline Manager : createPipeLine');
+
+        event.preventDefault();
+        
         const form = event.target;
         const data = {
             name: form.name.value,
@@ -151,7 +125,7 @@ const PipelinesManager = (function() {
 
         const result = await NoteLibAPI.post('/api/pipelines/', data);
         if (result) {
-            hideModal('createPipelineModal');
+            bootstrap.Modal.getInstance(document.getElementById('createPipelineModal')).hide();
             form.reset();
             window.location.href = `/pipelines/${result.id}/edit/`;
         }
@@ -163,7 +137,7 @@ const PipelinesManager = (function() {
     async function executePipeline(pipelineId) {
         if (!confirm('Lancer l\'exécution de ce pipeline ?')) return;
 
-        const result = await NoteLibAPI.post(`/runs/${pipelineId}/launch/`, {
+        const result = await NoteLibAPI.post(`/api/pipelines/${pipelineId}/runs/`, {
             input_manifest: {},
             execution_mode: 'async'
         });
@@ -213,8 +187,9 @@ const PipelinesManager = (function() {
     // API publique
     return {
         init() {
-            console.log('PipelinesManager init');
             loadPipelines();
+
+            console.log('PipelinesManager init')
 
             // Recherche
             const searchInput = document.getElementById('search-pipeline');
@@ -236,9 +211,10 @@ const PipelinesManager = (function() {
     };
 })();
 
-// Auto-init
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("Hello")
     if (document.getElementById('pipelines-list')) {
+        console.error('in addEventListener')
         PipelinesManager.init();
     }
 });

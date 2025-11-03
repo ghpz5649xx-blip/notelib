@@ -37,7 +37,7 @@
                     <i class="bi bi-download"></i> Exporter
                 </button>
                 <button class="btn btn-warning" onclick="executePipeline()">
-                    <i class="bi bi-play"></i> Exécuter
+                    <i class="fas fa-running"></i> Lancer
                 </button>
             </div>
         </div>
@@ -207,7 +207,7 @@ function renderGraph(graph) {
         text.setAttribute('y', node._y + 5);
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('font-size', '12');
-        text.textContent = node.id;
+        text.textContent = node.feature_name;
         
         g.appendChild(circle);
         g.appendChild(text);
@@ -216,7 +216,7 @@ function renderGraph(graph) {
 }
 
 function editPipeline() {
-    window.location.href = window.location.pathname + '/edit/';
+    window.location.href = window.location.pathname + 'edit/';
 }
 
 async function validatePipeline() {
@@ -242,17 +242,7 @@ async function exportPipeline() {
 }
 
 async function executePipeline() {
-    if (!confirm('Lancer l\'exécution ?')) return;
-    
-    const result = await NoteLibAPI.put(`/api/executions/${pipeline.id}/`, {
-        input_manifest: {},
-        execution_mode: 'sync'
-    });
-    
-    if (result) {
-        alert('Exécution lancée');
-        window.location.href = `/runs/${result.id}/`;
-    }
+    window.location.href = `/runs/${pipeline.id}/launch/`;
 }
 
 document.addEventListener('DOMContentLoaded', loadPipeline);

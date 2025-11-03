@@ -6,38 +6,29 @@
 {% block wiki_contents %}
 <div class="container-fluid mt-4">
     <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h2>
-                <i class="bi bi-play-circle"></i>
-                Exécutions
-            </h2>
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2><i class="fas fa-running"></i> Runs</h2>
+        </div>
+        <div class="col-md-4 text-end">
         </div>
     </div>
 
-    <!-- Filtres -->
-    <div class="row mb-3">
-        <div class="col-md-4">
-            <select class="form-select" id="filter-pipeline">
-                <option value="">Tous les pipelines</option>
-            </select>
+    <!-- Barre de recherche + pagination -->
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-6 mb-2 mb-md-0">
+            <input type="text" id="search-runs" class="form-control" placeholder="🔍 Rechercher un pipeline, une description, une date, etc.">
         </div>
-        <div class="col-md-3">
-            <select class="form-select" id="filter-status">
-                <option value="">Tous les statuts</option>
-                <option value="PENDING">En attente</option>
-                <option value="RUNNING">En cours</option>
-                <option value="SUCCESS">Succès</option>
-                <option value="FAILED">Échec</option>
-                <option value="CANCELLED">Annulé</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <button class="btn btn-primary w-100" onclick="loadRuns()">
-                <i class="bi bi-arrow-clockwise"></i> Actualiser
+        <div class="col-md-6 text-md-end">
+            <button id="delete-selected" class="btn btn-outline-danger btn-sm" disabled>
+                <i class="bi bi-trash"></i> Supprimer sélection
+            </button>
+            <button class="btn btn-outline-primary btn-sm" >
+                <i class="fas fa-running"><a href="/runs/launch">Nouveau run</a></i>
             </button>
         </div>
     </div>
+
 
     <!-- Table -->
     <div class="row">
@@ -46,10 +37,12 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0" id="runs-table">
-                            <thead class="table-light">
+                            <thead class="table-light align-middle">
                                 <tr>
+                                    <th style="width:30px;"><input type="checkbox" id="select-all"></th>
                                     <th>ID</th>
                                     <th>Pipeline</th>
+                                    <th>Description</th>
                                     <th>Statut</th>
                                     <th>Mode</th>
                                     <th>Durée</th>
@@ -59,13 +52,18 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="7" class="text-center py-4">
+                                    <td colspan="8" class="text-center py-4">
                                         <div class="spinner-border text-primary"></div>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="card-footer text-center" id="pagination-controls">
+                    <!-- boutons générés dynamiquement -->
                 </div>
             </div>
         </div>
@@ -78,59 +76,96 @@
 
 <script>
 let runs = [];
-let pipelines = [];
+let filtered = [];
+let currentPage = 1;
+let pageSize = 10;
 let autoRefreshInterval = null;
 
+// ----- API Calls -----
 async function loadRuns() {
-    const pipelineFilter = document.getElementById('filter-pipeline').value;
-    const statusFilter = document.getElementById('filter-status').value;
-    
-    let url = '/api/runs/';
-    const params = new URLSearchParams();
-    if (pipelineFilter) params.append('pipeline', pipelineFilter);
-    if (statusFilter) params.append('status', statusFilter);
-    
-    if (params.toString()) url += '?' + params.toString();
-    
-    const data = await NoteLibAPI.get(url);
+    const data = await NoteLibAPI.get('/api/runs/');
     if (data) {
         runs = data.results || data;
+        currentPage = 1;
         renderRuns();
     }
 }
 
-async function loadPipelines() {
-    const data = await NoteLibAPI.get('/api/pipelines/');
-    if (data) {
-        pipelines = data.results || data;
-        
-        const select = document.getElementById('filter-pipeline');
-        select.innerHTML = '<option value="">Tous les pipelines</option>' +
-            pipelines.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-    }
-}
-
+// ----- Filtering + Pagination -----
 function renderRuns() {
     const tbody = document.querySelector('#runs-table tbody');
-    
-    if (runs.length === 0) {
+    const paginationDiv = document.getElementById('pagination-controls');
+
+    if (!runs.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4 text-muted">
+                <td colspan="8" class="text-center py-4 text-muted">
                     <i class="bi bi-inbox" style="font-size: 2rem;"></i>
                     <p class="mt-2">Aucune exécution</p>
                 </td>
-            </tr>
-        `;
+            </tr>`;
+        paginationDiv.innerHTML = '';
         return;
     }
 
-    tbody.innerHTML = runs.map(r => `
+    const searchTerm = (document.getElementById('search-runs')?.value || '').toLowerCase();
+
+    filtered = runs.filter(r => {
+        const statusLabels = {
+            'PENDING': 'en attente',
+            'RUNNING': 'en cours',
+            'SUCCESS': 'succès',
+            'FAILED': 'échec',
+            'CANCELLED': 'annulé'
+        };
+
+        const createdAtText = new Date(r.created_at)
+            .toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+
+        const fields = [
+            r.pipeline_name,
+            r.id,
+            r.description,
+            r.status,
+            r.execution_mode,
+            statusLabels[r.status],
+            createdAtText
+        ].map(v => (v || '').toLowerCase());
+
+        const terms = searchTerm.split(/\s+/).filter(Boolean);
+        if (!terms.length) return true;
+
+        return terms.every(term => fields.some(f => f.includes(term)));
+    });
+
+    if (!filtered.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Aucune exécution correspondante</p>
+                </td>
+            </tr>`;
+        paginationDiv.innerHTML = '';
+        return;
+    }
+
+    // pagination
+    const totalPages = Math.ceil(filtered.length / pageSize);
+    if (currentPage > totalPages) currentPage = totalPages || 1;
+
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const pageItems = filtered.slice(start, end);
+
+    tbody.innerHTML = pageItems.map(r => `
         <tr>
+            <td><input type="checkbox" class="run-checkbox" value="${r.id}"></td>
             <td><code class="small">${r.id.substring(0, 8)}</code></td>
             <td><strong>${r.pipeline_name || '-'}</strong></td>
+            <td>${r.description || '-'}</td>
             <td>${getStatusBadge(r.status)}</td>
-            <td><span class="badge bg-secondary">${r.execution_mode}</span></td>
+            <td><span class="badge bg-secondary text-white">${r.execution_mode}</span></td>
             <td>${formatDuration(r.duration)}</td>
             <td><small class="text-muted">${formatDate(r.created_at)}</small></td>
             <td>
@@ -141,33 +176,98 @@ function renderRuns() {
                     ${r.status === 'RUNNING' || r.status === 'PENDING' ? `
                         <button class="btn btn-outline-danger" onclick="cancelRun('${r.id}')" title="Annuler">
                             <i class="bi bi-x-circle"></i>
-                        </button>
-                    ` : ''}
+                        </button>` : ''}
                     ${r.status === 'FAILED' || r.status === 'CANCELLED' ? `
                         <button class="btn btn-outline-warning" onclick="retryRun('${r.id}')" title="Relancer">
                             <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                    ` : ''}
+                        </button>` : ''}
                 </div>
             </td>
-        </tr>
-    `).join('');
+        </tr>`).join('');
+
+    // --- Pagination controls ---
+    paginationDiv.innerHTML = renderPaginationControls(totalPages, filtered.length, start, end);
+
+
+    // Réattacher l'écouteur sur le sélecteur page-size après chaque rendu
+    document.getElementById('page-size')?.addEventListener('change', e => {
+        pageSize = parseInt(e.target.value);
+        currentPage = 1;
+        renderRuns();
+    });
 }
 
+function renderPaginationControls(totalPages, totalItems, startIndex, endIndex) {
+    const showingStart = totalItems ? startIndex + 1 : 0;
+    const showingEnd = Math.min(endIndex, totalItems);
+
+    let paginationHTML = '';
+
+    if (totalPages > 1) {
+        paginationHTML = `
+            <nav>
+                <ul class="pagination mb-0">
+                    <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                        <a class="page-link" href="#" onclick="gotoPage(${currentPage - 1});return false;">&laquo;</a>
+                    </li>`;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 2) {
+                paginationHTML += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="gotoPage(${i});return false;">${i}</a>
+                    </li>`;
+            } else if (i === 2 && currentPage > 4) {
+                paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            } else if (i === totalPages - 1 && currentPage < totalPages - 3) {
+                paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+
+        paginationHTML += `
+                    <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                        <a class="page-link" href="#" onclick="gotoPage(${currentPage + 1});return false;">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>`;
+    }
+
+    return `
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-2">
+            ${paginationHTML || '<div></div>'}
+            
+            <div class="d-flex align-items-center justify-content-end flex-wrap gap-4 pe-2">
+                <div class="text-muted small" gap-4 pe-2>
+                    Affiche ${showingStart}–${showingEnd} sur ${totalItems} exécution${totalItems > 1 ? 's' : ''}
+                </div>
+                <div class="d-flex align-items-center" gap-4 pe-2 >
+                    <select id="page-size" class="form-select form-select-sm w-auto">
+                        <option value="10" ${pageSize === 10 ? 'selected' : ''}>10</option>
+                        <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
+                        <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+                        <option value="500" ${pageSize === 500 ? 'selected' : ''}>500</option>
+                    </select>
+                </div>
+            </div>
+
+
+        </div>`;
+}
+
+// ----- Helpers -----
 function getStatusBadge(status) {
     const badges = {
-        'PENDING': '<span class="badge bg-secondary status-pending">⏳ En attente</span>',
-        'RUNNING': '<span class="badge bg-warning status-running">▶️ En cours</span>',
-        'SUCCESS': '<span class="badge bg-success status-success">✓ Succès</span>',
-        'FAILED': '<span class="badge bg-danger status-failed">✗ Échec</span>',
-        'CANCELLED': '<span class="badge bg-dark">⊗ Annulé</span>'
+        'PENDING': '<span class="badge bg-secondary text-white">En attente</span>',
+        'RUNNING': '<span class="badge bg-warning text-white">En cours</span>',
+        'SUCCESS': '<span class="badge bg-success text-white">Succès</span>',
+        'FAILED': '<span class="badge bg-danger text-white">Échec</span>',
+        'CANCELLED': '<span class="badge bg-dark text-white">Annulé</span>'
     };
     return badges[status] || status;
 }
 
 async function cancelRun(runId) {
     if (!confirm('Annuler cette exécution ?')) return;
-    
     const result = await NoteLibAPI.post(`/api/runs/${runId}/cancel/`);
     if (result) {
         alert('Exécution annulée');
@@ -177,7 +277,6 @@ async function cancelRun(runId) {
 
 async function retryRun(runId) {
     if (!confirm('Relancer cette exécution ?')) return;
-    
     const result = await NoteLibAPI.post(`/api/runs/${runId}/retry/`);
     if (result) {
         alert('Nouvelle exécution lancée');
@@ -197,21 +296,17 @@ function formatDate(dateStr) {
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now - date;
-    
     if (diff < 60000) return 'À l\'instant';
     if (diff < 3600000) return `Il y a ${Math.floor(diff / 60000)} min`;
     if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)} h`;
-    
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
+// ----- Auto-refresh -----
 function startAutoRefresh() {
-    // Auto-refresh toutes les 5s si des runs sont en cours
     autoRefreshInterval = setInterval(() => {
         const hasRunning = runs.some(r => r.status === 'RUNNING' || r.status === 'PENDING');
-        if (hasRunning) {
-            loadRuns();
-        }
+        if (hasRunning) loadRuns();
     }, 5000);
 }
 
@@ -222,16 +317,61 @@ function stopAutoRefresh() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadPipelines();
-    loadRuns();
-    startAutoRefresh();
-    
-    document.getElementById('filter-pipeline').addEventListener('change', loadRuns);
-    document.getElementById('filter-status').addEventListener('change', loadRuns);
-});
+// ----- Suppression -----
+async function deleteSelectedRuns() {
+    const checked = Array.from(document.querySelectorAll('.run-checkbox:checked')).map(cb => cb.value);
+    if (!checked.length) return;
+    if (!confirm(`Supprimer ${checked.length} exécution(s) ?`)) return;
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', stopAutoRefresh);
+    const result = await NoteLibAPI.post(`/api/runs/delete_many/`, { ids: checked });
+    if (result && result.deleted) {
+        alert(`${result.deleted} exécution(s) supprimée(s)`);
+        loadRuns();
+    }
+}
+
+function attachCheckboxListeners() {
+    const selectAll = document.getElementById('select-all');
+    const deleteBtn = document.getElementById('delete-selected');
+
+    selectAll?.addEventListener('change', e => {
+        const checkboxes = document.querySelectorAll('.run-checkbox');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        deleteBtn.disabled = !document.querySelector('.run-checkbox:checked');
+    });
+
+    document.addEventListener('change', e => {
+        if (e.target.classList.contains('run-checkbox')) {
+            const total = document.querySelectorAll('.run-checkbox').length;
+            const checked = document.querySelectorAll('.run-checkbox:checked').length;
+            selectAll.checked = checked === total;
+            deleteBtn.disabled = checked === 0;
+        }
+    });
+
+    deleteBtn?.addEventListener('click', deleteSelectedRuns);
+}
+
+// ----- Event Listeners -----
+function attachListeners() {
+    document.getElementById('search-runs')?.addEventListener('input', () => {
+        currentPage = 1;
+        renderRuns();
+    });
+
+    document.getElementById('page-size')?.addEventListener('change', e => {
+        pageSize = parseInt(e.target.value);
+        currentPage = 1;
+        renderRuns();
+    });
+
+    attachCheckboxListeners();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadRuns();
+    attachListeners();
+    startAutoRefresh();
+});
 </script>
 {% endblock %}

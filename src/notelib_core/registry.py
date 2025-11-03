@@ -1,42 +1,106 @@
 import threading
-from typing import Dict, List, Optional
-
-from typing import List, Optional, Callable
+import ast
+from typing import Optional, Dict, List, Any
 import inspect
 import hashlib
 
 class FeatureDef:
     """Représentation d'une feature enregistrée."""
+
     def __init__(self, obj, defined_in: Optional[str] = None, code_override: Optional[str] = None, hash_value: Optional[str] = None):
         if not (inspect.isfunction(obj) or inspect.isclass(obj)):
             raise TypeError(f"FeatureDef can only wrap a function or class, got {type(obj)}")
-        
+
         self.obj = obj
         self.name = obj.__name__
         self.defined_in = defined_in
 
-        # récupérer le code source
+        # Récupérer le code source
         self.code = code_override or ""
-
-        # hash du code
         self.hash = hash_value or hashlib.sha256(self.code.encode()).hexdigest()
 
-        # inputs / outputs
         if inspect.isclass(obj):
-            try:
-                sig = inspect.signature(obj.__init__)
-                self.inputs = [p for p in sig.parameters if p != "self"]
-            except Exception:
-                self.inputs = []
-            self.outputs = [obj.__name__]
+            self._extract_class_signature(obj)
         else:
-            try:
-                sig = inspect.signature(obj)
-                self.inputs = list(sig.parameters.keys())
-            except Exception:
-                self.inputs = []
-            self.outputs = [obj.__name__]
+            self._extract_function_signature_and_output(obj)
 
+    # =======================================================
+    # 🔍 Extraction pour les classes
+    # =======================================================
+    def _extract_class_signature(self, obj):
+        try:
+            sig = inspect.signature(obj.__init__)
+            self.inputs = [
+                f"{name}:{param.annotation.__name__ if param.annotation != inspect._empty else 'Any'}"
+                for name, param in sig.parameters.items()
+                if name != "self"
+            ]
+        except Exception:
+            self.inputs = []
+        self.outputs = [f"{obj.__name__}:object"]
+
+    # =======================================================
+    # 🔍 Extraction pour les fonctions
+    # =======================================================
+    def _extract_function_signature_and_output(self, obj):
+        # Récupérer les inputs avec types
+        try:
+            sig = inspect.signature(obj)
+            self.inputs = []
+            for name, param in sig.parameters.items():
+                ann = param.annotation
+                ann_str = self._annotation_to_str(ann)
+                self.inputs.append(f"{name}:{ann_str}")
+        except Exception:
+            self.inputs = []
+
+        # Déterminer l’output (nom + type)
+        output_name, output_type = self._infer_output_from_code_and_signature()
+        self.outputs = [f"{output_name}:{output_type}"]
+
+    # =======================================================
+    # 🧠 Conversion d’annotation -> string
+    # =======================================================
+    def _annotation_to_str(self, ann: Any) -> str:
+        if ann == inspect._empty:
+            return "Any"
+        if hasattr(ann, "__name__"):
+            return ann.__name__
+        if hasattr(ann, "__module__"):
+            return f"{ann.__module__}.{getattr(ann, '__name__', str(ann))}"
+        return str(ann)
+
+    # =======================================================
+    # 🧩 Analyse AST du code pour extraire le nom de variable retournée
+    # =======================================================
+    def _infer_output_from_code_and_signature(self):
+        output_name = self.name  # fallback
+        output_type = "Any"
+
+        # Essayer d'obtenir le type de retour via l’annotation
+        try:
+            sig = inspect.signature(self.obj)
+            if sig.return_annotation != inspect._empty:
+                output_type = self._annotation_to_str(sig.return_annotation)
+        except Exception:
+            pass
+
+        # Si on a du code source : analyser le AST pour détecter le return
+        if self.code:
+            try:
+                tree = ast.parse(self.code)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Return) and isinstance(node.value, ast.Name):
+                        output_name = node.value.id
+                        break
+            except Exception:
+                pass
+
+        return output_name, output_type
+
+    # =======================================================
+    # 🔧 Conversion en dict
+    # =======================================================
     def to_dict(self):
         return {
             "name": self.name,
@@ -46,7 +110,6 @@ class FeatureDef:
             "defined_in": self.defined_in,
             "code": self.code,
         }
-
 
 
 class FeatureRegistry:

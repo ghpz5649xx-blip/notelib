@@ -40,8 +40,8 @@
                         <button class="btn btn-primary" onclick="validatePipeline()">
                             <i class="bi bi-check-lg"></i> Valider
                         </button>
-                        <button class="btn btn-warning" onclick="executePipeline()">
-                            <i class="bi bi-play"></i> Exécuter
+                        <button class="btn btn-warning text-white" onclick="executePipeline()">
+                            <i class="fas fa-running"></i> Lancer
                         </button>
                         <button class="btn btn-danger" onclick="clearCanvas()">
                             <i class="bi bi-trash"></i> Effacer
@@ -336,18 +336,7 @@ async function validatePipeline() {
 }
 
 async function executePipeline() {
-    if (!confirm('Enregistrer et exécuter ?')) return;
-    await savePipeline();
-    
-    const result = await NoteLibAPI.post(`/api/executions/${pipeline.id}/`, {
-        input_manifest: {},
-        execution_mode: 'sync'
-    });
-    
-    if (result) {
-        alert('Exécution lancée');
-        window.location.href = `/runs/${result.id}/`;
-    }
+    window.location.href = `/runs/${pipeline.id}/launch/`;
 }
 
 document.addEventListener('DOMContentLoaded', init);

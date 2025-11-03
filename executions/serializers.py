@@ -34,7 +34,7 @@ class PipelineRunSerializer(serializers.ModelSerializer):
             'id', 'pipeline', 'pipeline_name', 'initiator', 'initiator_username',
             'status', 'input_manifest', 'execution_mode', 'output_artefacts',
             'created_at', 'started_at', 'finished_at', 'duration',
-            'logs', 'error_message', 'step_runs',
+            'logs', 'error_message', 'step_runs', 'description',
         ]
         read_only_fields = [
             'id', 'status', 'output_artefacts',
@@ -42,10 +42,10 @@ class PipelineRunSerializer(serializers.ModelSerializer):
             'logs', 'error_message',
         ]
 
-
 class PipelineRunCreateSerializer(serializers.Serializer):
     input_manifest = serializers.JSONField(required=True)
     execution_mode = serializers.ChoiceField(
         choices=['sync', 'async'],
-        default='async'
+        default='sync'
     )
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)

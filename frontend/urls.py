@@ -51,4 +51,9 @@ urlpatterns = [
         TemplateView.as_view(template_name="runs/detail.html"),
         name="run_detail"
     ),
+    path(
+        "runs/launch/",
+        TemplateView.as_view(template_name="runs/launch.html"),
+        name="run_launch"
+    ),
 ]

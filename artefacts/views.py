@@ -15,8 +15,12 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.http import FileResponse, StreamingHttpResponse
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse, HttpResponse, FileResponse
+from rest_framework.renderers import JSONRenderer
+from .renderers import XLSXRenderer, CSVRenderer  # ton renderer XLSX custom
+
+import pandas as pd
 
 from .models import ArtefactMeta
 from .serializers import (
@@ -43,6 +47,7 @@ class ArtefactViewSet(viewsets.ModelViewSet):
     serializer_class = ArtefactMetaSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'hash'
+    renderer_classes = [JSONRenderer, CSVRenderer, XLSXRenderer]
     
     def get_queryset(self):
         """Filtre par propriétaire si non-admin."""
@@ -153,8 +158,10 @@ class ArtefactViewSet(viewsets.ModelViewSet):
                 user=request.user
             )
 
+            logger.info(f"artefact après load {obj}")
+
             try:
-                data = json.loads(obj)
+                data = obj
             except json.JSONDecodeError:
                 logger.error(f"Artefact {hash} n'est pas du JSON valide après décompression.")
                 return Response(
@@ -162,6 +169,31 @@ class ArtefactViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # 🔧 Si l'objet est un DataFrame → conversion JSON propre
+            if isinstance(data, pd.DataFrame):
+                df = data.replace({float("inf"): None, float("-inf"): None})
+                df = df.where(pd.notnull(df), None)
+                payload = {
+                    "columns": list(df.columns),
+                    "rows": df.to_dict(orient="records"),
+                    "count": len(df),
+                }
+                return JsonResponse(
+                    payload,
+                    safe=False,
+                    json_dumps_params={"ensure_ascii": False},
+                    content_type="application/json; charset=utf-8",
+                )
+
+            # 🔧 Sinon, renvoyer un JSON normal (avec UTF-8)
+            return JsonResponse(
+                data,
+                safe=False,
+                json_dumps_params={"ensure_ascii": False},
+                content_type="application/json; charset=utf-8",
+            )
+
+            
             return Response(data)
 
             
@@ -250,10 +282,10 @@ class ArtefactViewSet(viewsets.ModelViewSet):
             hash_value = artefact.hash
             
             # Vérification ownership
-            if artefact.feature and artefact.feature.uploaded_by:
-                if (artefact.feature.uploaded_by != request.user 
-                    and not request.user.is_staff):
-                    raise PermissionDenied("You don't own this artefact")
+            # if artefact.feature and artefact.feature.uploaded_by:
+            #     if (artefact.feature.uploaded_by != request.user 
+            #         and not request.user.is_staff):
+            #         raise PermissionDenied("You don't own this artefact")
             
             # Suppression via le service (vérifie ref_count)
             force = request.query_params.get('force') == 'true' and request.user.is_staff
@@ -320,4 +352,84 @@ class ArtefactViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    @action(detail=True, methods=['get'])
+    def preview(self, request, hash=None):
+        """
+        Prévisualise un artefact tabulaire (DataFrame).
+        GET /api/artefacts/{hash}/preview/?limit=50
+        """
+        limit = int(request.query_params.get('limit', 50))
+        try:
+            df = artefact_service.get_dataframe_preview(hash, max_rows=limit)
+            if df is None:
+                return Response(
+                    {"error": "L'artefact n'est pas un DataFrame"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # 🔧 Nettoyage : remplacer NaN/NaT/inf par None
+            df = df.replace({float("inf"): None, float("-inf"): None})
+            df = df.where(pd.notnull(df), None)
+
+            data = {
+                "columns": list(df.columns),
+                "rows": df.to_dict(orient="records"),
+                "count": len(df),
+            }
+
+            # 🔧 JSON propre + UTF-8 + accents préservés
+            return JsonResponse(
+                data,
+                safe=False,
+                json_dumps_params={"ensure_ascii": False},
+                content_type="application/json; charset=utf-8",
+            )
+
+        except Exception as e:
+            logger.error(f"Erreur preview artefact {hash}: {e}", exc_info=True)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=['get'])
+    def export(self, request, hash=None):
+        """
+        Exporte un artefact tabulaire (DataFrame) via DRF renderers.
+        Exemple :
+          - /api/artefacts/{hash}/export/?format=csv
+          - /api/artefacts/{hash}/export/?format=xlsx
+        """
+        fmt = request.query_params.get('format', 'csv').lower()
+        if fmt not in ['csv', 'xlsx', 'json']:
+            return Response(
+                {"error": f"Format non supporté : {fmt}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            df = artefact_service.get_dataframe_preview(hash, max_rows=None)
+            if df is None:
+                return Response(
+                    {"error": "L'artefact n'est pas un DataFrame"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Nettoyage du DataFrame
+            df = df.replace({float("inf"): None, float("-inf"): None})
+            df = df.where(pd.notnull(df), None)
+            data = df.to_dict(orient="records")
+
+            # Définir un nom de fichier pour le renderer
+            self.export_filename = f"artefact_{hash[:8]}.{fmt}"
+
+            return Response(data)
+
+        except Exception as e:
+            logger.error(f"Erreur export artefact {hash}: {e}", exc_info=True)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

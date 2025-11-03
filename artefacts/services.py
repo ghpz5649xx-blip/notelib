@@ -14,6 +14,8 @@ from django.conf import settings
 
 from .models import ArtefactMeta, ArtefactAccessLog
 from .storage import artefact_storage
+import pandas as pd
+from io import BytesIO
 
 logger = logging.getLogger("notelib")
 
@@ -333,6 +335,45 @@ class ArtefactService:
         stats['referenced'] = ArtefactMeta.objects.filter(ref_count__gt=0).count()
         
         return stats
+    
+    def get_dataframe_preview(self, hash_value: str, max_rows: int = 50) -> Optional[pd.DataFrame]:
+        """
+        Retourne un aperçu d’un artefact s’il s’agit d’un DataFrame.
+        """
+        obj = self.load_artefact(hash_value, log_access=False)
+        if isinstance(obj, pd.DataFrame):
+            return obj.head(max_rows)
+        return None
+
+    def export_dataframe(self, hash_value: str, format: str = "csv") -> bytes:
+        """
+        Exporte un DataFrame en CSV ou XLSX.
+        """
+        df = self.load_artefact(hash_value, log_access=False)
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError("L'artefact n'est pas un DataFrame")
+
+        if format == "csv":
+            return df.to_csv(index=False).encode("utf-8")
+        elif format == "xlsx":
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                df.to_excel(writer, index=False)
+            return buffer.getvalue()
+        else:
+            raise ValueError("Format non supporté")
+
+    def is_dataframe(self, hash_value: str) -> bool:
+        """
+        Détermine si l’artefact est un DataFrame.
+        """
+        try:
+            obj = self.load_artefact(hash_value, log_access=False)
+            return isinstance(obj, pd.DataFrame)
+        except Exception:
+            return False
+
+
 
 
 # Instance globale

@@ -46,6 +46,13 @@ class PipelineRun(models.Model):
         related_name='runs',
         help_text="Pipeline exécuté"
     )
+
+    # Description du run
+    description = models.TextField(
+        default=None,
+        blank=True,
+        null=True
+    )
     
     # Initiateur
     initiator = models.ForeignKey(

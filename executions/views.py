@@ -115,6 +115,7 @@ class PipelineRunViewSet(viewsets.ModelViewSet):
                 input_manifest=serializer.validated_data['input_manifest'],
                 initiator=request.user,
                 execution_mode=serializer.validated_data['execution_mode'],
+                description=serializer.validated_data['description']
             )
             
             # Lancement selon le mode
@@ -338,3 +339,41 @@ class PipelineRunViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=True, methods=['delete', 'get'])
+    def delete(self, request, pk=None):
+        """
+        Supprime une exécution par ID.
+        DELETE ou GET /api/runs/{id}/delete/
+        """
+        try:
+            run = self.get_object()
+            if run.initiator != request.user and not request.user.is_staff:
+                raise PermissionDenied("You can't delete this run.")
+            run.delete()
+            return Response({'deleted': 1}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error deleting run {pk}: {e}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def delete_many(self, request):
+        """
+        Supprime plusieurs exécutions.
+        POST /api/runs/delete_many/
+        Body: { "ids": ["uuid1", "uuid2", ...] }
+        """
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': 'Missing ids'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            queryset = PipelineRun.objects.filter(id__in=ids)
+            if not request.user.is_staff:
+                queryset = queryset.filter(initiator=request.user)
+            count = queryset.count()
+            queryset.delete()
+            return Response({'deleted': count})
+        except Exception as e:
+            logger.error(f"Error deleting runs: {e}", exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

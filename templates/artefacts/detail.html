@@ -24,34 +24,13 @@
                 <div class="card-header"><strong>Métadonnées</strong></div>
                 <div class="card-body">
                     <table class="table table-sm table-borderless">
-                        <tr>
-                            <th>Hash:</th>
-                            <td><code class="small" id="meta-hash">-</code></td>
-                        </tr>
-                        <tr>
-                            <th>Feature:</th>
-                            <td id="meta-feature">-</td>
-                        </tr>
-                        <tr>
-                            <th>Taille:</th>
-                            <td id="meta-size">-</td>
-                        </tr>
-                        <tr>
-                            <th>Compression:</th>
-                            <td id="meta-compression">-</td>
-                        </tr>
-                        <tr>
-                            <th>MIME:</th>
-                            <td><code class="small" id="meta-mime">-</code></td>
-                        </tr>
-                        <tr>
-                            <th>Références:</th>
-                            <td id="meta-refs">-</td>
-                        </tr>
-                        <tr>
-                            <th>Créé le:</th>
-                            <td id="meta-created">-</td>
-                        </tr>
+                        <tr><th>Hash:</th><td><code class="small" id="meta-hash">-</code></td></tr>
+                        <tr><th>Feature:</th><td id="meta-feature">-</td></tr>
+                        <tr><th>Taille:</th><td id="meta-size">-</td></tr>
+                        <tr><th>Compression:</th><td id="meta-compression">-</td></tr>
+                        <tr><th>MIME:</th><td><code class="small" id="meta-mime">-</code></td></tr>
+                        <tr><th>Références:</th><td id="meta-refs">-</td></tr>
+                        <tr><th>Créé le:</th><td id="meta-created">-</td></tr>
                     </table>
 
                     <div class="d-grid gap-2">
@@ -97,166 +76,316 @@
 <link rel="stylesheet" href="{% static 'css/notelib_front.css' %}">
 
 <script>
-let artefact = null;
-let artefactHash = null;
-
-async function loadArtefact() {
-    artefactHash = window.location.pathname.split('/')[2];
-    artefact = await NoteLibAPI.get(`/api/artefacts/${artefactHash}/`);
-    
-    if (!artefact) return;
-
-    // Metadata
-    document.getElementById('breadcrumb-hash').textContent = artefactHash.substring(0, 12) + '...';
-    document.getElementById('meta-hash').textContent = artefactHash;
-    document.getElementById('meta-feature').innerHTML = artefact.feature_name 
-        ? `<strong>${artefact.feature_name}</strong>` 
-        : '<span class="text-muted">-</span>';
-    document.getElementById('meta-size').textContent = formatBytes(artefact.size);
-    
-    if (artefact.compression_ratio) {
-        const ratio = (artefact.compression_ratio * 100).toFixed(1);
-        const savings = (100 - artefact.compression_ratio * 100).toFixed(1);
-        document.getElementById('meta-compression').innerHTML = 
-            `<span class="badge bg-info">${ratio}%</span> <small>(${savings}% économisés)</small>`;
-    }
-    
-    document.getElementById('meta-mime').textContent = artefact.mime || 'application/octet-stream';
-    document.getElementById('meta-refs').innerHTML = artefact.ref_count > 0 
-        ? `<span class="badge bg-warning">${artefact.ref_count}</span>` 
-        : '<span class="badge bg-success">0</span>';
-    document.getElementById('meta-created').textContent = formatDate(artefact.created_at);
-    
-    // Delete button
-    if (!artefact.can_delete) {
-        document.getElementById('delete-btn').disabled = true;
-        document.getElementById('delete-btn').title = 'Artefact référencé';
+    /* -------------------------
+       Helpers
+       ------------------------- */
+    function safeValue(v) {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'number' && Number.isNaN(v)) return '';
+        return v;
     }
 
-    // Additional meta
-    document.getElementById('meta-additional').textContent = 
-        JSON.stringify(artefact.meta, null, 2);
+    function escapeHTML(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
-    // Preview
-    loadPreview();
-}
+    // 🔧 Ajout : pour sécuriser les noms de colonnes dans le DOM
+    function sanitizeColumnName(col) {
+        return String(col || '').replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
 
-async function loadPreview() {
-    const container = document.getElementById('preview-container');
-    const typeLabel = document.getElementById('preview-type');
-    const mime = artefact.mime || '';
+    function headerIncludes(headerValue, substr) {
+        if (!headerValue) return false;
+        try { return headerValue.toLowerCase().includes(substr.toLowerCase()); }
+        catch (e) { return false; }
+    }
 
-    // Try to load preview
-    try {
-        const response = await fetch(`/api/artefacts/${artefactHash}/download/?deserialize=true`, {
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+    /* -------------------------
+       Artefact hash extraction & validation
+       ------------------------- */
+    function extractArtefactHashFromPath() {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        let candidate = parts[1] || parts[2] || parts[0] || '';
+        candidate = decodeURIComponent(String(candidate || '')).trim();
+        const m = candidate.match(/[0-9a-f]{32,128}/i);
+        if (m) return m[0];
+        return candidate.replace(/[#?].*$/, '');
+    }
+
+    /* -------------------------
+       Main logic
+       ------------------------- */
+    let artefact = null;
+    let artefactHash = null;
+
+    async function loadArtefact() {
+        try {
+            artefactHash = extractArtefactHashFromPath();
+            console.debug('Extracted artefactHash:', artefactHash);
+
+            if (!artefactHash) {
+                throw new Error('artefactHash introuvable dans l\'URL');
             }
-        });
 
-        if (!response.ok) {
-            throw new Error('Preview non disponible');
+            artefact = await NoteLibAPI.get(`/api/artefacts/${encodeURIComponent(artefactHash)}/`);
+            console.debug('Artefact metadata:', artefact);
+
+            if (!artefact) {
+                showPreviewError('Artefact introuvable');
+                return;
+            }
+
+            document.getElementById('breadcrumb-hash').textContent = artefactHash.substring(0, 12) + '...';
+            document.getElementById('meta-hash').textContent = artefactHash;
+            document.getElementById('meta-feature').innerHTML = artefact.feature_name
+                ? `<strong>${escapeHTML(artefact.feature_name)}</strong>`
+                : '<span class="text-muted">-</span>';
+            document.getElementById('meta-size').textContent = formatBytes(artefact.size || 0);
+            document.getElementById('meta-mime').textContent = artefact.mime || 'application/octet-stream';
+            document.getElementById('meta-refs').innerHTML = artefact.ref_count > 0
+                ? `<span class="badge bg-warning">${artefact.ref_count}</span>`
+                : '<span class="badge bg-success">0</span>';
+            document.getElementById('meta-created').textContent = formatDate(artefact.created_at);
+            document.getElementById('meta-additional').textContent = JSON.stringify(artefact.meta || {}, null, 2);
+
+            if (!artefact.can_delete) {
+                const delBtn = document.getElementById('delete-btn');
+                if (delBtn) {
+                    delBtn.disabled = true;
+                    delBtn.title = 'Artefact référencé';
+                }
+            }
+
+            await loadPreview();
+        } catch (err) {
+            console.error('loadArtefact error:', err);
+            showPreviewError(err.message || String(err));
         }
+    }
 
-        const contentType = response.headers.get('content-type');
-
-        // Image
-        if (mime.startsWith('image/') || contentType.includes('image/')) {
-            typeLabel.textContent = 'Image';
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            container.innerHTML = `<img src="${url}" class="img-fluid rounded" alt="Preview">`;
-            return;
-        }
-
-        // JSON
-        if (contentType.includes('application/json')) {
-            typeLabel.textContent = 'JSON';
-            const data = await response.json();
-            container.innerHTML = `<pre class="bg-light p-3 rounded">${JSON.stringify(data, null, 2)}</pre>`;
-            return;
-        }
-
-        // Text
-        if (mime.startsWith('text/') || contentType.includes('text/')) {
-            typeLabel.textContent = 'Texte';
-            const text = await response.text();
-            container.innerHTML = `<pre class="bg-light p-3 rounded">${escapeHTML(text)}</pre>`;
-            return;
-        }
-
-        // Default: not previewable
-        typeLabel.textContent = 'Non prévisualisable';
-        container.innerHTML = `
-            <div class="text-center py-5 text-muted">
-                <i class="bi bi-file-earmark" style="font-size: 3rem;"></i>
-                <p class="mt-3">Ce type de fichier ne peut pas être prévisualisé.</p>
-                <p>Utilisez le bouton "Télécharger" pour récupérer le fichier.</p>
-            </div>
-        `;
-
-    } catch (error) {
-        typeLabel.textContent = 'Erreur';
-        container.innerHTML = `
-            <div class="alert alert-warning">
+    function showPreviewError(msg) {
+        const container = document.getElementById('preview-container');
+        const typeLabel = document.getElementById('preview-type');
+        if (typeLabel) typeLabel.textContent = 'Erreur';
+        if (container) {
+            container.innerHTML = `<div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle"></i>
-                Impossible de charger la prévisualisation.
-            </div>
-        `;
-    }
-}
-
-async function downloadArtefact() {
-    await NoteLibAPI.download(
-        `/api/artefacts/${artefactHash}/download/`, 
-        `artefact_${artefactHash.substring(0, 8)}.zst`
-    );
-}
-
-async function deleteArtefact() {
-    if (!confirm('Supprimer cet artefact définitivement ?')) return;
-    
-    const result = await NoteLibAPI.del(`/api/artefacts/${artefactHash}/`);
-    if (result !== null) {
-        alert('Artefact supprimé');
-        window.location.href = '/artefacts/';
-    }
-}
-
-function formatBytes(bytes) {
-    if (!bytes) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-}
-
-function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
+                ${escapeHTML(String(msg))}
+            </div>`;
         }
     }
-    return cookieValue;
-}
 
-document.addEventListener('DOMContentLoaded', loadArtefact);
+    /* -------------------------
+       Robust preview loader
+       ------------------------- */
+    async function loadPreview() {
+        const container = document.getElementById('preview-container');
+        const typeLabel = document.getElementById('preview-type');
+        if (!container || !typeLabel) {
+            console.error('preview container or typeLabel missing');
+            return;
+        }
+
+        container.innerHTML = `<div class="text-center py-4">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-3 text-muted">Chargement de la prévisualisation...</p>
+        </div>`;
+
+        try {
+            const previewUrl = `/api/artefacts/${encodeURIComponent(artefactHash)}/preview/?limit=10`;
+            console.debug('Fetching DF preview from', previewUrl);
+            let dfResponse;
+            try {
+                dfResponse = await fetch(previewUrl);
+            } catch (err) {
+                console.warn('DF preview fetch failed:', err);
+                dfResponse = null;
+            }
+
+            if (dfResponse && dfResponse.ok) {
+                const df = await dfResponse.json();
+                console.debug('DF preview payload', df);
+                renderDataFramePreview(df);
+                typeLabel.textContent = 'DataFrame';
+                return;
+            } else {
+                console.debug('No DF preview (status):', dfResponse ? dfResponse.status : 'no response');
+            }
+
+            const downloadUrl = `/api/artefacts/${encodeURIComponent(artefactHash)}/download/?deserialize=true`;
+            console.debug('Fetching fallback download from', downloadUrl);
+
+            const response = await fetch(downloadUrl, {
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Preview non disponible (HTTP ${response.status})`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            console.debug('fallback content-type:', contentType);
+
+            if (headerIncludes(contentType, 'image/')) {
+                typeLabel.textContent = 'Image';
+                const blob = await response.blob();
+                try {
+                    const url = URL.createObjectURL(blob);
+                    container.innerHTML = `<img src="${url}" class="img-fluid rounded" alt="Preview">`;
+                    return;
+                } catch (e) {
+                    const dataUrl = await blobToDataURL(blob);
+                    container.innerHTML = `<img src="${escapeHTML(dataUrl)}" class="img-fluid rounded" alt="Preview">`;
+                    return;
+                }
+            }
+
+            if (headerIncludes(contentType, 'application/json')) {
+                typeLabel.textContent = 'JSON';
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    const text = await response.text();
+                    throw new Error('Invalid JSON preview: ' + text.slice(0, 200));
+                }
+                container.innerHTML = `<pre class="bg-light p-3 rounded">${escapeHTML(JSON.stringify(data, null, 2))}</pre>`;
+                return;
+            }
+
+            if (headerIncludes(contentType, 'text/') || (artefact && artefact.mime && artefact.mime.startsWith('text/'))) {
+                typeLabel.textContent = 'Texte';
+                const text = await response.text();
+                container.innerHTML = `<pre class="bg-light p-3 rounded">${escapeHTML(text)}</pre>`;
+                return;
+            }
+
+            typeLabel.textContent = 'Non prévisualisable';
+            container.innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-file-earmark" style="font-size: 3rem;"></i>
+                    <p class="mt-3">Ce type de fichier ne peut pas être prévisualisé.</p>
+                    <p>Utilisez le bouton "Télécharger" pour récupérer le fichier.</p>
+                </div>
+            `;
+        } catch (err) {
+            console.error('Erreur preview artefact:', err);
+            showPreviewError(err.message || String(err));
+        }
+    }
+
+    /* -------------------------
+       Render helpers
+       ------------------------- */
+    function renderDataFramePreview(df) {
+        const container = document.getElementById('preview-container');
+        if (!df || !Array.isArray(df.columns) || !Array.isArray(df.rows)) {
+            throw new Error('Format preview DataFrame invalide');
+        }
+
+        const table = document.createElement('table');
+        table.className = 'table table-striped table-sm small';
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        // 🔧 Utilise sanitizeColumnName() pour éviter les erreurs DOM
+        thead.innerHTML = `<tr>${df.columns.map(c => `<th data-col="${sanitizeColumnName(c)}">${escapeHTML(c)}</th>`).join('')}</tr>`;
+
+        tbody.innerHTML = df.rows
+            .map(r => {
+                return `<tr>${df.columns.map(c => {
+                    const safe = safeValue(r[c]);
+                    return `<td data-col="${sanitizeColumnName(c)}">${escapeHTML(safe)}</td>`;
+                }).join('')}</tr>`;
+            })
+            .join('');
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+
+        container.innerHTML = '';
+        const exportDiv = document.createElement('div');
+        exportDiv.className = 'mt-3';
+        exportDiv.innerHTML = `
+            <a class="btn btn-outline-secondary btn-sm me-2" href="/api/artefacts/${encodeURIComponent(artefactHash)}/export/?format=csv">
+                <i class="bi bi-filetype-csv"></i> Télécharger CSV
+            </a>
+            <a class="btn btn-outline-secondary btn-sm" href="/api/artefacts/${encodeURIComponent(artefactHash)}/export/?format=xlsx">
+                <i class="bi bi-filetype-xlsx"></i> Télécharger Excel
+            </a>
+        `;
+        container.appendChild(exportDiv);
+        container.appendChild(table);
+    }
+
+    function blobToDataURL(blob) {
+        return new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(String(fr.result));
+            fr.onerror = (e) => reject(e);
+            fr.readAsDataURL(blob);
+        });
+    }
+
+    /* -------------------------
+       Download / Delete / Utils
+       ------------------------- */
+    async function downloadArtefact() {
+        await NoteLibAPI.download(
+            `/api/artefacts/${encodeURIComponent(artefactHash)}/download/`,
+            `artefact_${artefactHash.substring(0, 8)}.zst`
+        );
+    }
+
+    async function deleteArtefact() {
+        if (!confirm('Supprimer cet artefact définitivement ?')) return;
+        const result = await NoteLibAPI.del(`/api/artefacts/${encodeURIComponent(artefactHash)}/`);
+        if (result !== null) {
+            alert('Artefact supprimé');
+            window.location.href = '/artefacts/';
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    /* -------------------------
+       Init
+       ------------------------- */
+    document.addEventListener('DOMContentLoaded', loadArtefact);
 </script>
+
+    
 {% endblock %}

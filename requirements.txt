@@ -31,6 +31,7 @@ django-nyt==1.4.2
 django-sekizai==4.1.0
 djangorestframework==3.16.1
 entrypoints==0.4
+et_xmlfile==2.0.0
 exceptiongroup==1.3.0
 executing==2.2.1
 fastjsonschema==2.21.2
@@ -76,8 +77,9 @@ nbformat==5.10.4
 nest-asyncio==1.6.0
 notebook==7.4.7
 notebook_shim==0.2.4
--e git+https://github.com/ghpz5649xx-blip/notelib.git@75d869c577a434525ba00c184dad93ccfe5a34e3#egg=notelib_core
+-e git+https://github.com/ghpz5649xx-blip/notelib.git@b8da5ea128a369d36dc8719f928b601124f40bc9#egg=notelib_core
 numpy==2.3.4
+openpyxl==3.1.5
 overrides==7.7.0
 packaging==25.0
 pandas==2.3.3

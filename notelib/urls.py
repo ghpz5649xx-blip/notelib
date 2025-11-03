@@ -28,12 +28,15 @@ urlpatterns = [
     
     # Django-nyt notifications (requis par django-wiki)
     path('notifications/', include('django_nyt.urls')),
-    
-    # Wiki URLs - accessible à la racine
-    path('wiki/', get_wiki_pattern()),
 
     # Front end racine
     path('', include('frontend.urls')),
+
+    # --- Vue HTML ---
+    path('runs/', include('executions.web_urls')),
+
+    # Wiki URLs - accessible à la racine
+    path('', get_wiki_pattern()),
 ]
 
 # Servir les fichiers média en développement
