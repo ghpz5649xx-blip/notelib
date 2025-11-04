@@ -156,6 +156,17 @@ class PipelineRun(models.Model):
         self.finished_at = timezone.now()
         self.save(update_fields=['status', 'finished_at'])
 
+    @property
+    def last_step(self):
+        """Retourne la dernière étape du pipeline (celle marquée is_last=True)."""
+        return self.step_runs.filter(is_last=True).first()
+
+    @property
+    def last_artefact_hash(self):
+        """Retourne l'artefact associé à la dernière étape, s'il existe."""
+        last = self.last_step
+        return last.artefact.hash if last else None
+
 
 class StepRun(models.Model):
     """
@@ -254,6 +265,9 @@ class StepRun(models.Model):
     # Logs (optionnel)
     stdout = models.TextField(blank=True)
     stderr = models.TextField(blank=True)
+
+    # Identifie si c'est la last step
+    is_last = models.BooleanField(default=False)
     
     class Meta:
         ordering = ['created_at']

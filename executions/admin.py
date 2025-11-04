@@ -57,7 +57,7 @@ class StepRunAdmin(admin.ModelAdmin):
     list_display = [
         'id_short', 'pipeline_run', 'node_id',
         'feature_name', 'status_badge',
-        'attempts', 'duration_display',
+        'attempts', 'duration_display','is_last',
     ]
     list_filter = ['status', 'attempts']
     search_fields = ['id', 'node_id', 'feature_name']

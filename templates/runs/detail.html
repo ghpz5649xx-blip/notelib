@@ -187,7 +187,10 @@ function renderTimeline() {
         return;
     }
 
-    container.innerHTML = steps.map(step => {
+    // 🟢 Inverser l’ordre des étapes avant d’afficher
+    const reversedSteps = [...steps].reverse();
+
+    container.innerHTML = reversedSteps.map(step => {
         const statusClass = step.status.toLowerCase();
         return `
             <div class="timeline-item ${statusClass}">
@@ -202,7 +205,7 @@ function renderTimeline() {
                         <a href="/artefacts/${step.artefact_hash}/" 
                            class="btn btn-sm btn-outline-primary"
                            title="Voir l'artefact">
-                            <i class="bi bi-archive"></i>
+                            <i class="bi bi-download"></i>
                         </a>
                     ` : ''}
                 </div>
@@ -215,6 +218,7 @@ function renderTimeline() {
         `;
     }).join('');
 }
+
 
 async function loadLogs() {
     const logsData = await NoteLibAPI.get(`/api/runs/${runId}/logs/`);

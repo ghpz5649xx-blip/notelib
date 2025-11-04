@@ -32,7 +32,14 @@
         <div class="col-9">
             <div class="card shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong>Canvas</strong>
+                    <div class="d-flex align-items-center">
+                        <strong class="me-2">Nom du pipeline :</strong>
+                        <input id="pipeline-name" 
+                               type="text" 
+                               class="form-control form-control-sm" 
+                               style="width: 250px;" 
+                               placeholder="Nom du pipeline">
+                    </div>                  
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-success" onclick="savePipeline()">
                             <i class="bi bi-save"></i> Enregistrer
@@ -48,6 +55,17 @@
                         </button>
                     </div>
                 </div>
+                <div class="card-header">
+                    <div class="mb-2">
+                        <strong class="d-block mb-1">Description :</strong>
+                        <textarea id="pipeline-description"
+                                  class="form-control form-control-sm"
+                                  rows="2"
+                                  style="max-width: 100%; resize: vertical;"
+                                  placeholder="Description du pipeline"></textarea>
+                    </div>
+                </div>
+                               
                 <div class="card-body p-0">
                     <svg id="canvas" 
                          class="border rounded w-100" 
@@ -92,6 +110,8 @@ async function init() {
     if (pipeline) {
         document.getElementById('editor-title').innerHTML = 
             `<i class="bi bi-pencil"></i> Éditer: ${pipeline.name}`;
+        document.getElementById('pipeline-name').value = pipeline.name;
+        document.getElementById('pipeline-description').value = pipeline.description || '';
         graph = pipeline.graph || { nodes: [], edges: [] };
         nodeIdCounter = graph.nodes.length + 1;
     }
@@ -313,19 +333,36 @@ function renderGraph() {
 
 // ========== SAVE/VALIDATE/EXECUTE ==========
 async function savePipeline() {
+    const newName = document.getElementById('pipeline-name').value.trim();
+    const newDesc = document.getElementById('pipeline-description').value.trim();
+
+    if (!newName) {
+        alert('Veuillez saisir un nom de pipeline.');
+        return;
+    }
+
+    pipeline.name = newName;
+    pipeline.description = newDesc;
     pipeline.graph = graph;
+
     const payload = {
         name: pipeline.name,
-        description: pipeline.description || "",
+        description: pipeline.description,
         graph: pipeline.graph,
         tags: pipeline.tags || { none: "none" }
-    }
+    };
+
     console.log("Payload sent to API:", JSON.stringify(payload, null, 2));
+
     const result = await NoteLibAPI.put(`/api/pipelines/${pipeline.id}/`, payload);
     if (result) {
         alert('Pipeline enregistré ✓');
+        document.getElementById('editor-title').innerHTML = 
+            `<i class="bi bi-pencil"></i> Éditer: ${pipeline.name}`;
     }
 }
+
+
 
 async function validatePipeline() {
     await savePipeline();

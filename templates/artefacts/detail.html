@@ -34,9 +34,6 @@
                     </table>
 
                     <div class="d-grid gap-2">
-                        <button class="btn btn-success" onclick="downloadArtefact()">
-                            <i class="bi bi-download"></i> Télécharger
-                        </button>
                         <button class="btn btn-danger" onclick="deleteArtefact()" id="delete-btn">
                             <i class="bi bi-trash"></i> Supprimer
                         </button>
@@ -142,12 +139,11 @@
             }
 
             document.getElementById('breadcrumb-hash').textContent = artefactHash.substring(0, 12) + '...';
-            document.getElementById('meta-hash').textContent = artefactHash;
+            document.getElementById('meta-hash').textContent = artefactHash.substring(0, 8) + '...';
             document.getElementById('meta-feature').innerHTML = artefact.feature_name
                 ? `<strong>${escapeHTML(artefact.feature_name)}</strong>`
                 : '<span class="text-muted">-</span>';
             document.getElementById('meta-size').textContent = formatBytes(artefact.size || 0);
-            document.getElementById('meta-mime').textContent = artefact.mime || 'application/octet-stream';
             document.getElementById('meta-refs').innerHTML = artefact.ref_count > 0
                 ? `<span class="badge bg-warning">${artefact.ref_count}</span>`
                 : '<span class="badge bg-success">0</span>';

@@ -17,7 +17,7 @@ class StepRunSerializer(serializers.ModelSerializer):
             'status', 'inputs', 'artefact', 'artefact_hash',
             'attempts', 'max_attempts', 'can_retry',
             'started_at', 'finished_at', 'duration',
-            'error', 'stdout', 'stderr',
+            'error', 'stdout', 'stderr','is_last'
         ]
         read_only_fields = ['id', 'started_at', 'finished_at']
 
@@ -27,6 +27,7 @@ class PipelineRunSerializer(serializers.ModelSerializer):
     initiator_username = serializers.CharField(source='initiator.username', read_only=True)
     pipeline_name = serializers.CharField(source='pipeline.name', read_only=True)
     step_runs = StepRunSerializer(many=True, read_only=True)
+    last_artefact_hash = serializers.CharField(read_only=True)
     
     class Meta:
         model = PipelineRun
@@ -34,7 +35,7 @@ class PipelineRunSerializer(serializers.ModelSerializer):
             'id', 'pipeline', 'pipeline_name', 'initiator', 'initiator_username',
             'status', 'input_manifest', 'execution_mode', 'output_artefacts',
             'created_at', 'started_at', 'finished_at', 'duration',
-            'logs', 'error_message', 'step_runs', 'description',
+            'logs', 'error_message', 'step_runs', 'description', 'last_artefact_hash',
         ]
         read_only_fields = [
             'id', 'status', 'output_artefacts',

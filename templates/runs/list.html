@@ -158,7 +158,18 @@ function renderRuns() {
     const end = start + pageSize;
     const pageItems = filtered.slice(start, end);
 
-    tbody.innerHTML = pageItems.map(r => `
+    tbody.innerHTML = pageItems.map(r => {
+        // ✅ Bouton artefact seulement si last_artefact_hash non nul
+        const artefactButton = r.last_artefact_hash
+            ? `
+                <a href="/artefacts/${r.last_artefact_hash}/" 
+                   class="btn btn-sm btn-outline-primary"
+                   title="Voir l'artefact">
+                    <i class="bi bi-download"></i>
+                </a>`
+            : '';
+
+        return `
         <tr>
             <td><input type="checkbox" class="run-checkbox" value="${r.id}"></td>
             <td><code class="small">${r.id.substring(0, 8)}</code></td>
@@ -181,9 +192,11 @@ function renderRuns() {
                         <button class="btn btn-outline-warning" onclick="retryRun('${r.id}')" title="Relancer">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>` : ''}
+                    ${artefactButton}
                 </div>
             </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 
     // --- Pagination controls ---
     paginationDiv.innerHTML = renderPaginationControls(totalPages, filtered.length, start, end);

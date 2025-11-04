@@ -111,7 +111,8 @@ class ExecutionService:
                     feature_name=feature.name,
                     feature_hash=feature.hash,
                     status='PENDING',
-                    inputs={k: v for k, v in (item.split(":", 1) for item in ports_in)}
+                    inputs={k: v for k, v in (item.split(":", 1) for item in ports_in)},
+                    is_last=False
                 )
             
             logger.info(
@@ -150,6 +151,7 @@ class ExecutionService:
             
             # Calcul de l'ordre d'exécution
             execution_order = pipeline_service.topological_sort(run.pipeline.graph)
+            last_step = execution_order[-1]
             
             logger.info(
                 f"🚀 Starting sync execution: {run.id}\n"
@@ -164,7 +166,10 @@ class ExecutionService:
                 )
                 
                 try:
-                    self._execute_step(run, step_run)
+                    is_last = False
+                    if node_id == last_step:
+                        is_last = True
+                    self._execute_step(run, step_run, is_last)
                 except Exception as e:
                     logger.error(f"Step {node_id} failed: {e}", exc_info=True)
             
@@ -187,7 +192,7 @@ class ExecutionService:
             run.mark_failed(str(e))
             raise
     
-    def _execute_step(self, run: PipelineRun, step: StepRun):
+    def _execute_step(self, run: PipelineRun, step: StepRun, is_last=False):
         """
         Exécute un StepRun individuel.
         
@@ -241,7 +246,8 @@ class ExecutionService:
             step.mark_success(artefact.hash)
             step.stdout = metadata.get('stdout', '')
             step.stderr = metadata.get('stderr', '')
-            step.save(update_fields=['stdout', 'stderr'])
+            step.is_last = is_last
+            step.save(update_fields=['stdout', 'stderr','is_last'])
             
             # 6. Enregistrement dans output_artefacts du run
             run.output_artefacts[step.node_id] = artefact.hash
